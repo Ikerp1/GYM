@@ -73,11 +73,12 @@
     item(true, "Sesión iniciada: " + (user.displayName || user.email));
     try {
       const ref = doc(db, "users", user.uid, "meta", "prueba");
-      await setDoc(ref, { ultimaPrueba: serverTimestamp() });
-      const snap = await getDoc(ref);
+      const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej({ code: "timeout" }), ms));
+      await Promise.race([setDoc(ref, { ultimaPrueba: serverTimestamp() }), timeout(10000)]);
+      const snap = await Promise.race([getDoc(ref), timeout(10000)]);
       item(snap.exists(), snap.exists() ? "Base de datos: guardar y leer funciona" : "Base de datos: no se pudo leer el dato");
     } catch (e) {
-      item(false, e.code === "permission-denied" ? "Base de datos: las reglas no permiten guardar. Revisa el paso 4 (pestaña Reglas)." : "Base de datos: error (" + e.code + "). ¿Has creado Firestore (paso 4)?");
+      item(false, e.code === "permission-denied" ? "Base de datos: las reglas no permiten guardar. Revisa el paso 4 (pestaña Reglas)." : e.code === "timeout" ? "Base de datos: no responde. ¿Has creado Firestore Database en Firebase?" : "Base de datos: error (" + e.code + "). ¿Has creado Firestore Database en Firebase?");
     }
   });
 </script>
