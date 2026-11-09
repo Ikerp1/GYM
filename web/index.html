@@ -56,6 +56,7 @@
     catch (e) {
       checks.hidden = false; checks.replaceChildren();
       const msg = e.code === "auth/unauthorized-domain" ? "Falta añadir ikerp1.github.io en Authentication → Configuración → Dominios autorizados."
+        : e.code === "auth/configuration-not-found" ? "Falta activar Authentication en Firebase: Authentication → Comenzar, y luego Método de acceso → Google → Habilitar → Guardar."
         : e.code === "auth/operation-not-allowed" ? "El inicio de sesión con Google no está activado en Authentication → Método de acceso."
         : e.code === "auth/popup-closed-by-user" ? "Has cerrado la ventana de Google antes de terminar."
         : "No se pudo iniciar sesión (" + e.code + ").";
