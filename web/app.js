@@ -487,7 +487,7 @@ function ProgressView({ finished, exById, onDelete }) {
   const thisWeek = finished.filter((w) => w.finishedAt >= weekStart.getTime()).length;
 
   return html`<section class="view">
-    <header class="view-head"><p class="eyebrow">Tus números</p><h1>Progreso</h1></header>
+    <header class="view-head"><p class="eyebrow">Tus números</p><h1>Progress</h1></header>
     <div class="stats">
       <div><b>${thisWeek}</b><span>esta semana</span></div>
       <div><b>${thisMonth}</b><span>este mes</span></div>
@@ -917,7 +917,7 @@ function App() {
   const lastRoutineWorkout = finished.find((w) => w.routineId && routines.some((r) => r.id === w.routineId));
   const nextId = routines.length ? routines[lastRoutineWorkout ? (routines.findIndex((r) => r.id === lastRoutineWorkout.routineId) + 1) % routines.length : 0].id : null;
 
-  const tabs = [["hoy", active ? "Entreno" : "Hoy", I.today], ["rutinas", "Rutinas", I.list], ["progreso", "Progreso", I.chart], ["amigos", "Amigos", I.users]];
+  const tabs = [["hoy", active ? "Entreno" : "Hoy", I.today], ["rutinas", "Rutinas", I.list], ["progreso", "Progress", I.chart], ["amigos", "Amigos", I.users]];
 
   return html`<div class="app">
     <header class="topbar">
