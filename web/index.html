@@ -253,6 +253,21 @@ svg.fig, svg.fig-big { stroke: none; fill: none; }
 .hist-main small { color: var(--muted); font-size: 14px; }
 .hist-detail { padding: 0 16px 10px; display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
 
+/* Selector bajo los números de Progress: calendario · tiempo · kilos */
+.panel-wrap { display: grid; gap: 10px; }
+.panel-switch { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px; }
+.panel-switch button { flex: 1; min-height: 44px; display: grid; place-items: center; border-radius: 10px; color: var(--muted); transition: background .15s, color .15s; }
+.panel-switch button.on { background: var(--accent); color: var(--accent-fg); }
+.panel-switch svg { width: 22px; height: 22px; }
+.panel { gap: 10px; }
+.panel-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.panel-stats > div { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; display: grid; gap: 1px; }
+.panel-stats b { font: 700 20px var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.panel-stats span { color: var(--muted); font-size: 12px; }
+.chart .bar { fill: rgba(245, 165, 36, .45); }
+.chart .bar.last { fill: var(--accent); }
+.chart .bar-val { fill: var(--fg); font: 600 10px var(--font-body); }
+
 /* Calendario de días entrenados (Progress) */
 .cal { gap: 8px; padding: 12px 14px 14px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

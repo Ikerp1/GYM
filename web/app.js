@@ -61,6 +61,7 @@ const I = {
   search: html`<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>`,
   trophy: html`<svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5a3 3 0 003 4M16 6h3a3 3 0 01-3 4M12 13v4M8.5 20h7"/></svg>`,
   timer: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4"/></svg>`,
+  calendar: html`<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`,
   back: html`<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>`,
   users: html`<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.4c1.7.8 2.9 2.6 3.4 5.1"/></svg>`,
   copy: html`<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/></svg>`,
@@ -519,6 +520,81 @@ function TrainingCalendar({ finished, exById }) {
   </section>`;
 }
 
+// Gráfica de barras sencilla (una barra por entreno), con el valor encima de cada barra.
+function BarChart({ bars, unit, label }) {
+  if (!bars.length) return html`<div class="empty small">Todavía no hay entrenos para esta gráfica.</div>`;
+  const W = 340, H = 190, padL = 8, padR = 8, padT = 22, padB = 24;
+  const max = Math.max(...bars.map((b) => b.v)) || 1;
+  const slot = (W - padL - padR) / bars.length;
+  const bw = Math.min(28, slot * 0.68);
+  const showVal = bars.length <= 14;
+  const labelEvery = Math.ceil(bars.length / 7);
+  const fmtV = (v) => v >= 10000 ? `${(v / 1000).toFixed(1).replace(".", ",")}k` : Math.round(v).toLocaleString("es-ES");
+  return html`<svg class="chart bars" viewBox="0 0 ${W} ${H}" role="img" aria-label=${label}>
+    <line x1=${padL} x2=${W - padR} y1=${H - padB} y2=${H - padB} class="grid" />
+    ${bars.map((b, i) => {
+      const h = Math.max(2, (b.v / max) * (H - padT - padB));
+      const cx = padL + slot * i + slot / 2;
+      const last = i === bars.length - 1;
+      return html`<g>
+        <rect x=${cx - bw / 2} y=${H - padB - h} width=${bw} height=${h} rx="4" class=${last ? "bar last" : "bar"} />
+        ${showVal && html`<text x=${cx} y=${H - padB - h - 5} class="bar-val" text-anchor="middle">${fmtV(b.v)}</text>`}
+        ${(i % labelEvery === 0 || last) && html`<text x=${cx} y=${H - 7} class="tick" text-anchor="middle">${shortDate(b.t)}</text>`}
+      </g>`;
+    })}
+  </svg>`;
+}
+
+const fmtMinutes = (min) => min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+
+// Selector bajo los números: calendario, tiempo entrenado o kilos por entreno.
+const PANELS = [["cal", "Calendario", "calendar"], ["time", "Tiempo entrenado", "timer"], ["kg", "Kilos por entreno", "today"]];
+function StatsPanel({ finished, exById }) {
+  const [panel, setPanelState] = useState(() => { try { return localStorage.getItem("gym-panel") || "cal"; } catch { return "cal"; } });
+  const setPanel = (p) => { setPanelState(p); try { localStorage.setItem("gym-panel", p); } catch {} };
+  const chrono = [...finished].sort((a, b) => a.finishedAt - b.finishedAt);
+
+  let body;
+  if (panel === "time") {
+    const since = Date.now() - 30 * 86400000;
+    const list = chrono.filter((w) => w.finishedAt >= since);
+    const bars = list.map((w) => ({ t: w.finishedAt, v: minutes(w.startedAt, w.finishedAt) }));
+    const total = bars.reduce((n, b) => n + b.v, 0);
+    body = html`<section class="card panel">
+      <header class="panel-head"><p class="eyebrow">Últimos 30 días · minutos por entreno</p></header>
+      <div class="panel-stats">
+        <div><b>${fmtMinutes(total)}</b><span>en total</span></div>
+        <div><b>${bars.length ? fmtMinutes(Math.round(total / bars.length)) : "—"}</b><span>de media</span></div>
+        <div><b>${bars.length}</b><span>entrenos</span></div>
+      </div>
+      <${BarChart} bars=${bars} unit="min" label=${`Minutos por entreno en los últimos 30 días: ${fmtMinutes(total)} en total`} />
+    </section>`;
+  } else if (panel === "kg") {
+    const vol = (w) => w.items.reduce((n, it) => n + it.sets.reduce((s, x) => s + (x.kg || 0) * (x.reps || 0), 0), 0);
+    const bars = chrono.slice(-12).map((w) => ({ t: w.finishedAt, v: vol(w) }));
+    const avg = bars.length ? bars.reduce((n, b) => n + b.v, 0) / bars.length : 0;
+    const best = chrono.reduce((a, w) => (vol(w) > (a?.v ?? -1) ? { v: vol(w), t: w.finishedAt } : a), null);
+    body = html`<section class="card panel">
+      <header class="panel-head"><p class="eyebrow">Kilos por entreno (peso × reps)</p></header>
+      <div class="panel-stats">
+        <div><b>${bars.length ? Math.round(bars.at(-1).v).toLocaleString("es-ES") : "—"}</b><span>último (kg)</span></div>
+        <div><b>${bars.length ? Math.round(avg).toLocaleString("es-ES") : "—"}</b><span>media (kg)</span></div>
+        <div><b>${best ? Math.round(best.v).toLocaleString("es-ES") : "—"}</b><span>mejor (kg)</span></div>
+      </div>
+      <${BarChart} bars=${bars} unit="kg" label="Kilos levantados en cada uno de los últimos entrenos" />
+    </section>`;
+  } else {
+    body = html`<${TrainingCalendar} finished=${finished} exById=${exById} />`;
+  }
+
+  return html`<div class="panel-wrap">
+    <div class="panel-switch" role="tablist" aria-label="Qué ver">
+      ${PANELS.map(([id, label, icon]) => html`<button role="tab" aria-selected=${panel === id} aria-label=${label} title=${label} class=${panel === id ? "on" : ""} onClick=${() => setPanel(id)}>${I[icon]}</button>`)}
+    </div>
+    ${body}
+  </div>`;
+}
+
 function ProgressView({ finished, exById, onDelete }) {
   const [metric, setMetric] = useState("kg");
   const [open, setOpen] = useState(null);
@@ -556,7 +632,7 @@ function ProgressView({ finished, exById, onDelete }) {
       <div><b>${thisMonth}</b><span>este mes</span></div>
       <div><b>${finished.length}</b><span>en total</span></div>
     </div>
-    <${TrainingCalendar} finished=${finished} exById=${exById} />
+    <${StatsPanel} finished=${finished} exById=${exById} />
 
     ${exIds.length ? html`
       <section class="card">
