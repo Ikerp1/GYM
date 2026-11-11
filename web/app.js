@@ -62,6 +62,8 @@ const I = {
   trophy: html`<svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5a3 3 0 003 4M16 6h3a3 3 0 01-3 4M12 13v4M8.5 20h7"/></svg>`,
   timer: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4"/></svg>`,
   calendar: html`<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`,
+  body: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2.2"/><path d="M5 8.5h14M12 8.5v6M9 21l3-6.5 3 6.5"/></svg>`,
+  scale: html`<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9.5a4.5 4.5 0 018 0M12 9.5l1.5-2"/></svg>`,
   back: html`<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>`,
   users: html`<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.4c1.7.8 2.9 2.6 3.4 5.1"/></svg>`,
   copy: html`<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/></svg>`,
@@ -159,8 +161,8 @@ function ExerciseInfo({ ex, onClose }) {
 }
 
 // ---------- Gráfica ----------
-function LineChart({ points, unit }) {
-  if (points.length < 2) return html`<div class="empty small">La gráfica aparece cuando tengas al menos dos entrenos de este ejercicio.</div>`;
+function LineChart({ points, unit, emptyText = "La gráfica aparece cuando tengas al menos dos entrenos de este ejercicio." }) {
+  if (points.length < 2) return html`<div class="empty small">${emptyText}</div>`;
   const W = 340, H = 180, padL = 36, padR = 12, padT = 14, padB = 24;
   const vals = points.map((p) => p.v);
   let min = Math.min(...vals), max = Math.max(...vals);
@@ -726,7 +728,111 @@ function ExerciseStats({ exId, ex, sessions, onBack }) {
   </div>`;
 }
 
-function ProgressView({ finished, exById, onDelete }) {
+// ---------- Body: peso y medidas corporales ----------
+// Mediciones en users/{uid}/body/{id} = { t, weight, fat, waist, chest, arm, thigh }.
+// Altura y peso objetivo en users/{uid}/meta/body = { height, goal }.
+const BODY_FIELDS = [
+  ["weight", "Peso", "kg"], ["fat", "Grasa corporal", "%"], ["waist", "Cintura", "cm"],
+  ["chest", "Pecho", "cm"], ["arm", "Brazo", "cm"], ["thigh", "Muslo", "cm"],
+];
+const bmiOf = (kg, cm) => (kg && cm ? kg / (cm / 100) ** 2 : null);
+const bmiLabel = (b) => (b < 18.5 ? "Bajo peso" : b < 25 ? "Normal" : b < 30 ? "Sobrepeso" : "Obesidad");
+const isoDay = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const signed = (v, unit) => `${v > 0 ? "+" : ""}${fmtKg(Math.round(v * 10) / 10)} ${unit}`;
+
+function BodyView({ uid, toast }) {
+  const [entries, setEntries] = useState(null);
+  const [prof, setProf] = useState(null);
+  const [form, setForm] = useState(null);       // nueva medición en curso
+  const [editProf, setEditProf] = useState(null); // { height, goal } mientras se edita
+  const [metric, setMetric] = useState("weight");
+  const [ask, setAsk] = useState(null);
+  useEffect(() => watchCollection(uid, "body", (l) => setEntries(l.sort((a, b) => a.t - b.t)), () => setEntries([])), [uid]);
+  useEffect(() => watchDoc(["users", uid, "meta", "body"], (d) => setProf(d || {}), () => setProf({})), [uid]);
+  if (!entries || !prof) return html`<div class="empty small">Cargando…</div>`;
+
+  const withW = entries.filter((e) => e.weight);
+  const cur = withW.at(-1), first = withW[0];
+  const bmi = bmiOf(cur?.weight, prof.height);
+  const toGoal = prof.goal && cur ? cur.weight - prof.goal : null;
+  const month = cur ? withW.filter((e) => e.t >= cur.t - 30 * 86400000)[0] : null;
+  const present = BODY_FIELDS.filter(([k]) => entries.some((e) => e[k] != null));
+  const m = present.some(([k]) => k === metric) ? metric : present[0]?.[0] || "weight";
+  const mInfo = BODY_FIELDS.find(([k]) => k === m);
+  const points = entries.filter((e) => e[m] != null).map((e) => ({ t: e.t, v: e[m] }));
+
+  const openForm = () => setForm({ date: isoDay(Date.now()), ...Object.fromEntries(BODY_FIELDS.map(([k]) => [k, ""])) });
+  const saveForm = async () => {
+    const data = { t: new Date(form.date + "T12:00:00").getTime() };
+    for (const [k] of BODY_FIELDS) { const v = num(form[k]); if (v != null && v > 0) data[k] = v; }
+    if (!data.weight) { toast("Pon al menos tu peso"); return; }
+    await saveDoc(uid, "body", newId(), data);
+    setForm(null); toast("Medición guardada");
+  };
+  const saveProf = async () => {
+    const height = num(editProf.height), goal = num(editProf.goal);
+    await mergeDoc(["users", uid, "meta", "body"], { height: height || null, goal: goal || null });
+    setEditProf(null); toast("Datos guardados");
+  };
+  const field = (k, label, unit, val, set, opt) => html`<label class="body-field"><span>${label}${opt ? html` <i>(opcional)</i>` : ""}</span>
+    <div class="unit-input"><input class="input" inputmode="decimal" placeholder="—" value=${val} onInput=${(e) => set(e.target.value)} /><em>${unit}</em></div></label>`;
+
+  return html`<div class="body">
+    <div class="tiles">
+      <div><span>Peso actual</span><b>${cur ? html`${fmtKg(cur.weight)}<small> kg</small>` : "—"}</b>${cur && first && cur !== first ? html`<small class=${"delta " + (cur.weight < first.weight ? "down" : cur.weight > first.weight ? "up" : "")}>${signed(cur.weight - first.weight, "kg")} desde el inicio</small>` : html`<small class="delta">${cur ? shortDate(cur.t) : "Sin mediciones"}</small>`}</div>
+      <div><span>IMC</span><b>${bmi ? fmtKg(Math.round(bmi * 10) / 10) : "—"}</b><small class="delta">${bmi ? bmiLabel(bmi) : prof.height ? "Añade tu peso" : "Pon tu altura"}</small></div>
+      <button class="tile-btn" onClick=${() => setEditProf({ height: prof.height ?? "", goal: prof.goal ?? "" })}><span>Altura</span><b>${prof.height ? html`${prof.height}<small> cm</small>` : "—"}</b><small class="delta">Tocar para cambiar</small></button>
+      <button class="tile-btn" onClick=${() => setEditProf({ height: prof.height ?? "", goal: prof.goal ?? "" })}><span>Objetivo</span><b>${prof.goal ? html`${fmtKg(prof.goal)}<small> kg</small>` : "—"}</b><small class="delta">${toGoal == null ? "Tocar para poner" : Math.abs(toGoal) < 0.05 ? "¡Conseguido!" : `${toGoal > 0 ? "Te sobran" : "Te faltan"} ${fmtKg(Math.round(Math.abs(toGoal) * 10) / 10)} kg`}</small></button>
+    </div>
+    ${month && month !== cur && html`<p class="muted small center">Últimos 30 días: ${signed(cur.weight - month.weight, "kg")}</p>`}
+
+    ${editProf && html`<section class="card body-form">
+      <p class="eyebrow">Tus datos</p>
+      <div class="body-grid">
+        ${field("height", "Altura", "cm", editProf.height, (v) => setEditProf((p) => ({ ...p, height: v })))}
+        ${field("goal", "Peso objetivo", "kg", editProf.goal, (v) => setEditProf((p) => ({ ...p, goal: v })), true)}
+      </div>
+      <div class="row-btns"><button class="btn ghost" onClick=${() => setEditProf(null)}>Cancelar</button><button class="btn primary" onClick=${saveProf}>Guardar</button></div>
+    </section>`}
+
+    ${form ? html`<section class="card body-form">
+      <p class="eyebrow">Nueva medición</p>
+      <label class="body-field"><span>Fecha</span><input class="input" type="date" value=${form.date} max=${isoDay(Date.now())} onInput=${(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></label>
+      <div class="body-grid">
+        ${BODY_FIELDS.map(([k, label, unit]) => field(k, label, unit, form[k], (v) => setForm((f) => ({ ...f, [k]: v })), k !== "weight"))}
+      </div>
+      <p class="muted small">Consejo: pésate y mídete siempre en las mismas condiciones (por ejemplo, por la mañana en ayunas) para que los datos se puedan comparar.</p>
+      <div class="row-btns"><button class="btn ghost" onClick=${() => setForm(null)}>Cancelar</button><button class="btn primary" onClick=${saveForm}>Guardar</button></div>
+    </section>` : html`<button class="btn primary block" onClick=${openForm}>${I.plus} Añadir medición</button>`}
+
+    ${present.length > 0 && html`<section class="card">
+      <div class="chips scroll-x">${present.map(([k, label]) => html`<button class=${"chip " + (m === k ? "on" : "")} onClick=${() => setMetric(k)}>${label}</button>`)}</div>
+      <${LineChart} points=${points} unit=${mInfo[2]} emptyText="La gráfica aparece cuando tengas al menos dos mediciones." />
+    </section>`}
+
+    ${present.some(([k]) => entries.filter((e) => e[k] != null).length > 1) && html`<section class="card">
+      <h3 class="pr-title plain">Cambios desde el principio</h3>
+      <ul class="pr-list">${present.map(([k, label, unit]) => {
+        const vals = entries.filter((e) => e[k] != null);
+        if (vals.length < 2) return null;
+        const d = vals.at(-1)[k] - vals[0][k];
+        return html`<li><span>${label}</span><b>${fmtKg(vals[0][k])} → ${fmtKg(vals.at(-1)[k])} ${unit}</b><small>${signed(d, unit)}</small></li>`;
+      })}</ul>
+    </section>`}
+
+    ${entries.length > 0 && html`<h3 class="pr-title plain">Mediciones</h3>
+      <ul class="day-list">${[...entries].reverse().map((e) => html`<li class="session-li">
+        <div class="body-row-head"><span class="session-date">${dayLabel(e.t)}</span>
+          <button class="icon-btn" aria-label="Borrar medición" onClick=${() => setAsk({ title: "Borrar medición", text: `¿Borrar la medición del ${dayLabel(e.t)}?`, yes: "Borrar", danger: true, onYes: () => removeDoc(uid, "body", e.id) })}>${I.trash}</button></div>
+        <span class="day-sets">${BODY_FIELDS.filter(([k]) => e[k] != null).map(([k, label, unit]) => html`<span class="day-set"><small>${label} </small>${fmtKg(e[k])}<small> ${unit}</small></span>`)}</span>
+      </li>`)}</ul>`}
+    ${!entries.length && !form && html`<div class="empty small">Añade tu primera medición para empezar a ver tu evolución.</div>`}
+    <p class="muted small">El IMC es orientativo: con mucha masa muscular puede salir alto aunque estés en forma.</p>
+    ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}
+  </div>`;
+}
+
+function ProgressView({ finished, exById, onDelete, uid, toast }) {
   const [sheet, setSheet] = useState(null); // "ex" = progreso por ejercicio, "hist" = historial
   const [open, setOpen] = useState(null);
   const [ask, setAsk] = useState(null);
@@ -761,6 +867,7 @@ function ProgressView({ finished, exById, onDelete }) {
     <div class="nav-list">
       <button class="nav-btn" aria-label="Progreso por ejercicio: gráfica y récords" onClick=${() => setSheet("ex")}>${I.chart}<span>Por ejercicio</span></button>
       <button class="nav-btn" aria-label="Historial de entrenos" onClick=${() => setSheet("hist")}>${I.list}<span>Historial</span></button>
+      <button class="nav-btn" aria-label="Body: peso y medidas" onClick=${() => setSheet("body")}>${I.body}<span>Body</span></button>
     </div>
 
     ${sheet === "ex" && html`<${Sheet} title=${exId && byEx[exId] ? exById[exId]?.name || "Ejercicio" : "Por ejercicio"} onClose=${() => { setSheet(null); setExId(null); }}>
@@ -795,6 +902,7 @@ function ProgressView({ finished, exById, onDelete }) {
         </li>`)}
       </ul>` : html`<div class="empty">Todavía no hay entrenos guardados.</div>`}
     </${Sheet}>`}
+    ${sheet === "body" && html`<${Sheet} title="Body" onClose=${() => setSheet(null)}><${BodyView} uid=${uid} toast=${toast} /></${Sheet}>`}
     ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}
   </section>`;
 }
@@ -1199,7 +1307,7 @@ function App() {
           : html`<${TodayView} routines=${routines} finished=${finished} exById=${exById} lastSetsFor=${lastSetsFor} onStart=${startWorkout} goRoutines=${() => { setTab("rutinas"); setEditing({ id: newId(), name: "", items: [], isNew: true }); }} />`)
         : tab === "rutinas" ? html`<${RoutinesView} routines=${routines} exById=${exById} nextId=${nextId} onEdit=${(r) => setEditing(r)} onNew=${() => setEditing({ id: newId(), name: "", items: [], isNew: true })} onReorder=${reorder} />`
         : tab === "amigos" ? html`<${FriendsView} uid=${uid} mySummary=${mySummary} toast=${setToast} />`
-        : html`<${ProgressView} finished=${finished} exById=${exById} onDelete=${deleteWorkout} />`}
+        : html`<${ProgressView} finished=${finished} exById=${exById} onDelete=${deleteWorkout} uid=${uid} toast=${setToast} />`}
     </main>
     ${rest && html`<${RestBar} key=${rest.endsAt} rest=${rest} onChange=${setRest} />`}
     <${TabBar} tabs=${tabs} tab=${tab} onTab=${setTab} live=${!!active} />

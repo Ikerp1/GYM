@@ -312,6 +312,22 @@ svg.fig, svg.fig-big { stroke: none; fill: none; }
 .session-date { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
 .session-date::first-letter { text-transform: uppercase; }
 
+/* Body: peso y medidas */
+.body { display: grid; gap: 12px; }
+.tiles > .tile-btn { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; text-align: left; border: 1px dashed transparent; }
+.tiles > .tile-btn:hover { border-color: var(--line); }
+.tiles small.delta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.body-form { gap: 12px; }
+.body-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.body-field { display: grid; gap: 5px; font-size: 13px; font-weight: 600; color: var(--muted); min-width: 0; }
+.body-field i { font-style: normal; font-weight: 400; opacity: .7; }
+.unit-input { position: relative; }
+.unit-input .input { padding-right: 38px; font: 700 20px var(--font-display); color: var(--fg); }
+.unit-input em { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 13px; color: var(--muted); }
+.row-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.row-btns .btn { flex: 1; }
+.body-row-head { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+
 /* Calendario de días entrenados (Progress) */
 .cal { gap: 8px; padding: 12px 14px 14px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
