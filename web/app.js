@@ -458,8 +458,33 @@ function RoutinesView({ routines, exById, nextId, onEdit, onNew, onReorder }) {
 // ---------- Pantalla: Progreso ----------
 // Calendario compacto: un mes, con un bíceps en cada día entrenado.
 const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
-function TrainingCalendar({ finished }) {
+// Ventana con los entrenos de un día concreto (al tocar un día del calendario).
+function DayWorkouts({ date, workouts, exById, onClose }) {
+  const title = date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  return html`<${Sheet} title=${title} onClose=${onClose}>
+    ${workouts.length ? workouts.map((w) => {
+      const sets = w.items.reduce((n, it) => n + it.sets.length, 0);
+      const volume = w.items.reduce((n, it) => n + it.sets.reduce((s, x) => s + (x.kg || 0) * (x.reps || 0), 0), 0);
+      return html`<article class="day-workout">
+        <header class="day-head">
+          <h3>${w.name}</h3>
+          <p class="muted small">${new Date(w.startedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} · ${minutes(w.startedAt, w.finishedAt)} min · ${sets} series · ${Math.round(volume).toLocaleString("es-ES")} kg en total</p>
+        </header>
+        <ul class="day-list">${w.items.map((it) => html`<li>
+          <${ExerciseFigure} exId=${it.exId} />
+          <div class="day-ex">
+            <b>${exById[it.exId]?.name || "Ejercicio"}</b>
+            <span class="day-sets">${it.sets.map((s) => html`<span class="day-set">${fmtKg(s.kg)}<small> kg</small> × ${s.reps ?? "—"}</span>`)}</span>
+          </div>
+        </li>`)}</ul>
+      </article>`;
+    }) : html`<div class="empty small">Este día no entrenaste.</div>`}
+  </${Sheet}>`;
+}
+
+function TrainingCalendar({ finished, exById }) {
   const [offset, setOffset] = useState(0); // 0 = mes actual, -1 = anterior...
+  const [openDay, setOpenDay] = useState(null); // número de día abierto
   const first = new Date(); first.setHours(0, 0, 0, 0); first.setDate(1); first.setMonth(first.getMonth() + offset);
   const y = first.getFullYear(), m = first.getMonth();
   const daysInMonth = new Date(y, m + 1, 0).getDate();
@@ -480,11 +505,17 @@ function TrainingCalendar({ finished }) {
       ${Array.from({ length: lead }, () => html`<span></span>`)}
       ${Array.from({ length: daysInMonth }, (_, i) => {
         const day = i + 1, done = trained.has(day);
-        return html`<span class=${"cal-day" + (done ? " done" : "") + (day === todayN ? " today" : "") + (todayN && day > todayN ? " future" : "")} aria-label=${`${day}${done ? ", entrenado" : ""}`}>
+        const future = todayN && day > todayN;
+        return html`<button class=${"cal-day" + (done ? " done" : "") + (day === todayN ? " today" : "") + (future ? " future" : "")} disabled=${future} aria-label=${`${day}${done ? ", entrenado. Ver entreno" : ""}`} onClick=${() => setOpenDay(day)}>
           ${done ? html`${bicepIcon("bicep cal-bicep")}<small class="cal-dn">${day}</small>` : html`<span class="cal-n">${day}</span>`}
-        </span>`;
+        </button>`;
       })}
     </div>
+    ${openDay && html`<${DayWorkouts}
+      date=${new Date(y, m, openDay)}
+      workouts=${finished.filter((w) => { const d = new Date(w.finishedAt); return d.getFullYear() === y && d.getMonth() === m && d.getDate() === openDay; }).sort((a, b) => a.finishedAt - b.finishedAt)}
+      exById=${exById}
+      onClose=${() => setOpenDay(null)} />`}
   </section>`;
 }
 
@@ -525,7 +556,7 @@ function ProgressView({ finished, exById, onDelete }) {
       <div><b>${thisMonth}</b><span>este mes</span></div>
       <div><b>${finished.length}</b><span>en total</span></div>
     </div>
-    <${TrainingCalendar} finished=${finished} />
+    <${TrainingCalendar} finished=${finished} exById=${exById} />
 
     ${exIds.length ? html`
       <section class="card">
