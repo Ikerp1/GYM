@@ -1,10 +1,10 @@
 // GYM — app principal.
 // Pantallas: Hoy (rutina que toca + entreno en curso), Rutinas, Progreso.
 import { html, render, useState, useEffect, useMemo, useRef } from "https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js";
-import { watchUser, login, logout, watchCollection, saveDoc, removeDoc, newId, watchDoc, readDoc, mergeDoc, addToList, removeFromList } from "./db.js";
-import { BUILTIN_EXERCISES, GROUPS } from "./exercises.js";
-import { FIGURES } from "./figures.js";
-import { drawExercise, phaseAt, VIEWBOX, viewBoxFor } from "./figure-engine.js";
+import { watchUser, login, logout, watchCollection, saveDoc, removeDoc, newId, watchDoc, readDoc, mergeDoc, addToList, removeFromList } from "./db.js?v=__VERSION__";
+import { BUILTIN_EXERCISES, GROUPS } from "./exercises.js?v=__VERSION__";
+import { FIGURES } from "./figures.js?v=__VERSION__";
+import { drawExercise, phaseAt, VIEWBOX, viewBoxFor } from "./figure-engine.js?v=__VERSION__";
 
 // ---------- Utilidades ----------
 const DEFAULT_REST = 90;

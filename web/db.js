@@ -8,7 +8,7 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, arrayUnion, arrayRemove,
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig } from "./firebase-config.js?v=__VERSION__";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
