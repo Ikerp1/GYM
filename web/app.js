@@ -456,6 +456,38 @@ function RoutinesView({ routines, exById, nextId, onEdit, onNew, onReorder }) {
 }
 
 // ---------- Pantalla: Progreso ----------
+// Calendario compacto: un mes, con un bíceps en cada día entrenado.
+const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
+function TrainingCalendar({ finished }) {
+  const [offset, setOffset] = useState(0); // 0 = mes actual, -1 = anterior...
+  const first = new Date(); first.setHours(0, 0, 0, 0); first.setDate(1); first.setMonth(first.getMonth() + offset);
+  const y = first.getFullYear(), m = first.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const lead = (first.getDay() + 6) % 7; // huecos antes del día 1 (la semana empieza en lunes)
+  const trained = new Set();
+  for (const w of finished) { const d = new Date(w.finishedAt); if (d.getFullYear() === y && d.getMonth() === m) trained.add(d.getDate()); }
+  const now = new Date();
+  const todayN = now.getFullYear() === y && now.getMonth() === m ? now.getDate() : 0;
+  const title = first.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  return html`<section class="card cal">
+    <header class="cal-head">
+      <button class="icon-btn" aria-label="Mes anterior" onClick=${() => setOffset(offset - 1)}>${I.back}</button>
+      <div class="cal-title"><b>${title}</b><small>${trained.size ? `${trained.size} ${trained.size === 1 ? "día" : "días"} entrenado${trained.size === 1 ? "" : "s"}` : "Ningún día entrenado"}</small></div>
+      <button class="icon-btn flip" aria-label="Mes siguiente" disabled=${offset >= 0} onClick=${() => setOffset(offset + 1)}>${I.back}</button>
+    </header>
+    <div class="cal-grid" role="grid" aria-label=${"Días entrenados en " + title}>
+      ${WEEKDAYS.map((d) => html`<span class="cal-wd" aria-hidden="true">${d}</span>`)}
+      ${Array.from({ length: lead }, () => html`<span></span>`)}
+      ${Array.from({ length: daysInMonth }, (_, i) => {
+        const day = i + 1, done = trained.has(day);
+        return html`<span class=${"cal-day" + (done ? " done" : "") + (day === todayN ? " today" : "") + (todayN && day > todayN ? " future" : "")} aria-label=${`${day}${done ? ", entrenado" : ""}`}>
+          ${done ? html`${bicepIcon("bicep cal-bicep")}<small class="cal-dn">${day}</small>` : html`<span class="cal-n">${day}</span>`}
+        </span>`;
+      })}
+    </div>
+  </section>`;
+}
+
 function ProgressView({ finished, exById, onDelete }) {
   const [metric, setMetric] = useState("kg");
   const [open, setOpen] = useState(null);
@@ -493,6 +525,7 @@ function ProgressView({ finished, exById, onDelete }) {
       <div><b>${thisMonth}</b><span>este mes</span></div>
       <div><b>${finished.length}</b><span>en total</span></div>
     </div>
+    <${TrainingCalendar} finished=${finished} />
 
     ${exIds.length ? html`
       <section class="card">
@@ -730,7 +763,8 @@ function FriendsView({ uid, mySummary, toast }) {
 // ---------- Barra inferior con el bíceps que salta ----------
 // El bíceps ocupa el lugar del icono de la pestaña activa. Al cambiar de pestaña, salta en arco
 // desde la anterior hasta la nueva y, al llegar, "hace fuerza" (se hincha un momento).
-const BICEP = html`<svg class="bicep" viewBox="0 0 24 24" aria-hidden="true">
+// El mismo bíceps se usa en la barra y en el calendario (función: cada uso necesita su propia copia).
+const bicepIcon = (cls = "bicep") => html`<svg class=${cls} viewBox="0 0 24 24" aria-hidden="true">
   <path d="M3.6 18.2H18.2L15.4 6.4" class="bicep-arm" />
   <circle cx="9.4" cy="14.4" r="4.9" class="bicep-fill" />
   <circle cx="13.9" cy="4.6" r="3.7" class="bicep-fill" />
@@ -776,7 +810,7 @@ function TabBar({ tabs, tab, onTab, live }) {
   }, [tab]);
   return html`<nav class="tabbar" ref=${navRef}>
     ${tabs.map(([id, label, icon]) => html`<button data-tab=${id} class=${tab === id ? "on" : ""} aria-current=${tab === id ? "page" : undefined} onClick=${() => onTab(id)}><span class="tab-icon">${icon}</span><span>${label}</span>${id === "hoy" && live ? html`<i class="live-dot"></i>` : ""}</button>`)}
-    <span class="tab-fly" ref=${flyRef}>${BICEP}</span>
+    <span class="tab-fly" ref=${flyRef}>${bicepIcon()}</span>
   </nav>`;
 }
 
