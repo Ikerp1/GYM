@@ -31,6 +31,7 @@
   --ok: #3ecf8e;
   --ok-soft: rgba(62, 207, 142, .13);
   --danger: #f0605d;
+  --hint: #5f666f;
   --fig: #e4e7eb;
   --fig-far: #69707a;
   --eq: #474d55;
@@ -126,14 +127,13 @@ p { margin: 0; }
 .ex-tools { display: flex; gap: 2px; flex-shrink: 0; }
 .ex-tools.vertical { flex-direction: column; }
 .sets { display: grid; gap: 6px; }
-.set-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 68px 56px 44px; gap: 6px; align-items: center; }
+.set-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr) 46px; gap: 8px; align-items: center; }
 .set-row.head { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-align: center; }
-.set-row.head .prev-col { text-align: left; }
-.prev-val { color: var(--muted); font: 600 17px var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.prev-val small { font-size: 12px; font-family: var(--font-body); }
 .set-n { height: 40px; border-radius: 10px; font: 700 18px var(--font-display); color: var(--muted); }
 .num { width: 100%; min-width: 0; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); text-align: center; font: 700 19px var(--font-display); font-variant-numeric: tabular-nums; }
 .num:focus { border-color: var(--accent); outline: none; }
+/* Números en gris = lo de la última vez (pista). Lo que escribes hoy sale en blanco. */
+.num::placeholder { color: var(--hint); opacity: 1; font-weight: 600; }
 .check { height: 40px; border-radius: 10px; border: 2px solid var(--line); display: grid; place-items: center; color: transparent; }
 .check svg { width: 22px; height: 22px; stroke-width: 3; }
 .check.on { background: var(--ok); border-color: var(--ok); color: #06210f; }

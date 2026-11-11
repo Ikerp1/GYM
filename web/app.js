@@ -289,20 +289,24 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
   useEffect(() => () => { clearTimeout(timer.current); }, []);
   useEffect(() => { const flush = () => onSave(latest.current); window.addEventListener("pagehide", flush); return () => window.removeEventListener("pagehide", flush); }, []);
 
-  const setItem = (i, fn, immediate) => commit({ ...w, items: w.items.map((it, j) => (j === i ? fn(it) : it)) }, immediate);
+  // Parte siempre del estado más reciente, para no perder cambios hechos muy seguidos.
+  const setItem = (i, fn, immediate) => { const cur = latest.current; commit({ ...cur, items: cur.items.map((it, j) => (j === i ? fn(it) : it)) }, immediate); };
   const setSet = (i, k, patch, immediate) => setItem(i, (it) => ({ ...it, sets: it.sets.map((s, j) => (j === k ? { ...s, ...patch } : s)) }), immediate);
   const toggle = (i, k) => {
     unlockAudio();
     const s = w.items[i].sets[k];
-    setSet(i, k, { done: !s.done }, true);
+    // Si marcas ✓ sin escribir nada, se usan los números en gris (los de la última vez).
+    const fill = !s.done ? { kg: s.kg ?? s.hint?.kg ?? null, reps: s.reps ?? s.hint?.reps ?? null } : {};
+    setSet(i, k, { ...fill, done: !s.done }, true);
     if (!s.done) onRest(w.items[i].rest || DEFAULT_REST);
   };
-  const addSet = (i) => setItem(i, (it) => { const l = it.sets.at(-1); return { ...it, sets: [...it.sets, { kg: l?.kg ?? null, reps: l?.reps ?? null, done: false }] }; }, true);
+  // Serie nueva: vacía, con la pista en gris de la serie anterior.
+  const addSet = (i) => setItem(i, (it) => { const l = it.sets.at(-1); return { ...it, sets: [...it.sets, { kg: null, reps: null, done: false, hint: { kg: l?.kg ?? l?.hint?.kg ?? null, reps: l?.reps ?? l?.hint?.reps ?? null } }] }; }, true);
   const removeSet = (i, k) => setItem(i, (it) => ({ ...it, sets: it.sets.filter((_, j) => j !== k) }), true);
   const move = (i, d) => { const items = [...w.items]; [items[i], items[i + d]] = [items[i + d], items[i]]; commit({ ...w, items }, true); };
   const addExercise = (ex) => {
     const prev = lastSetsFor(ex.id);
-    const sets = (prev.length ? prev : [{}, {}, {}]).map((s) => ({ kg: s.kg ?? null, reps: s.reps ?? null, done: false }));
+    const sets = (prev.length ? prev : [{}, {}, {}]).map((s) => ({ kg: null, reps: null, done: false, hint: { kg: s.kg ?? null, reps: s.reps ?? null } }));
     commit({ ...w, items: [...w.items, { exId: ex.id, rest: DEFAULT_REST, sets }] }, true);
     setPicker(false);
   };
@@ -335,12 +339,11 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
           </div>
         </header>
         <div class="sets">
-          <div class="set-row head"><span aria-label="Serie">#</span><span class="prev-col">Anterior</span><span>kg</span><span>Reps</span><span></span></div>
+          <div class="set-row head"><span aria-label="Serie">#</span><span>kg</span><span>Reps</span><span></span></div>
           ${it.sets.map((s, k) => html`<div class=${"set-row " + (s.done ? "is-done" : "")}>
             <button class="set-n" aria-label=${"Borrar serie " + (k + 1)} title="Mantén pulsado para borrar" onContextMenu=${(e) => { e.preventDefault(); removeSet(i, k); }}>${k + 1}</button>
-            <span class="prev-col prev-val" aria-label=${prev[k] ? `Anterior: ${fmtKg(prev[k].kg)} kilos, ${prev[k].reps} repeticiones` : "Sin dato anterior"}>${prev[k] ? html`${fmtKg(prev[k].kg)}<small> kg</small> × ${prev[k].reps ?? "—"}` : "—"}</span>
-            <input id=${`kg-${i}-${k}`} class="num" inputmode="decimal" enterkeyhint="next" aria-label=${`Peso serie ${k + 1}`} value=${s.kg == null ? "" : String(s.kg).replace(".", ",")} placeholder="0" onFocus=${(e) => e.target.select()} onInput=${(e) => setSet(i, k, { kg: num(e.target.value) })} />
-            <input id=${`reps-${i}-${k}`} class="num" inputmode="numeric" enterkeyhint="done" aria-label=${`Repeticiones serie ${k + 1}`} value=${s.reps ?? ""} placeholder="0" onFocus=${(e) => e.target.select()} onInput=${(e) => setSet(i, k, { reps: num(e.target.value) })} />
+            <input id=${`kg-${i}-${k}`} class="num" inputmode="decimal" enterkeyhint="next" aria-label=${`Peso serie ${k + 1}`} value=${s.kg == null ? "" : String(s.kg).replace(".", ",")} placeholder=${s.hint?.kg != null ? fmtKg(s.hint.kg) : "kg"} onFocus=${(e) => e.target.select()} onInput=${(e) => setSet(i, k, { kg: num(e.target.value) })} />
+            <input id=${`reps-${i}-${k}`} class="num" inputmode="numeric" enterkeyhint="done" aria-label=${`Repeticiones serie ${k + 1}`} value=${s.reps ?? ""} placeholder=${s.hint?.reps != null ? String(s.hint.reps) : "reps"} onFocus=${(e) => e.target.select()} onInput=${(e) => setSet(i, k, { reps: num(e.target.value) })} />
             <button class=${"check " + (s.done ? "on" : "")} aria-label=${s.done ? "Desmarcar serie" : "Marcar serie hecha"} aria-pressed=${s.done} onClick=${() => toggle(i, k)}>${I.check}</button>
           </div>`)}
         </div>
@@ -602,8 +605,9 @@ function App() {
     const items = routine ? routine.items.map((it) => {
       const prev = lastSetsFor(it.exId);
       const sets = Array.from({ length: it.sets }, (_, k) => {
+        // Casillas vacías; en gris, lo de la última vez (o el peso y reps de la rutina si es la primera).
         const p = prev[k] || prev.at(-1);
-        return { kg: p?.kg ?? it.kg ?? null, reps: p?.reps ?? it.reps, done: false };
+        return { kg: null, reps: null, done: false, hint: { kg: p?.kg ?? it.kg ?? null, reps: p?.reps ?? it.reps ?? null } };
       });
       return { exId: it.exId, rest: it.rest || DEFAULT_REST, sets };
     }) : [];
@@ -614,7 +618,7 @@ function App() {
   };
   const saveWorkout = (w) => saveDoc(uid, "workouts", w.id, w);
   const finishWorkout = (w) => {
-    const items = w.items.map((it) => ({ ...it, sets: doneSets(it) })).filter((it) => it.sets.length);
+    const items = w.items.map((it) => ({ ...it, sets: doneSets(it).map(({ hint, ...s }) => s) })).filter((it) => it.sets.length);
     const done = { ...w, items, finishedAt: Date.now() };
     // Récords: peso máximo mayor que cualquier serie anterior de ese ejercicio.
     const records = [];
