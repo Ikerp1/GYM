@@ -211,6 +211,60 @@ function RestBar({ rest, onChange }) {
   </div>`;
 }
 
+// Frase de motivación del día: cambia cada día y es la misma durante todo ese día.
+const QUOTES = [
+  "El peso no se mueve solo. Hoy lo mueves tú.",
+  "No tienes que tener ganas. Solo tienes que empezar.",
+  "Una serie más de las que querías hacer: ahí es donde creces.",
+  "La constancia gana a la motivación todos los días.",
+  "Lo que hoy cuesta, dentro de un mes será tu calentamiento.",
+  "Nadie se arrepiente de un entreno terminado.",
+  "Hoy no compites con nadie. Solo con el de la semana pasada.",
+  "Pequeños kilos, grandes cambios.",
+  "El cansancio pasa. El progreso se queda.",
+  "Si fuera fácil, todo el mundo lo haría.",
+  "Tu único límite es el que te pones en la cabeza.",
+  "Cada repetición cuenta, aunque nadie la vea.",
+  "El músculo se construye con días normales, no con días perfectos.",
+  "Haz hoy lo que tu yo de mañana te agradecerá.",
+  "Más fuerte que ayer. Eso es todo lo que hace falta.",
+  "Entrena con la cabeza, levanta con el corazón.",
+  "No cuentes los días. Haz que los días cuenten.",
+  "La disciplina es elegir lo que quieres de verdad, no lo que quieres ahora.",
+  "Un mal entreno sigue siendo mejor que ningún entreno.",
+  "Tu cuerpo puede con más de lo que tu mente cree.",
+  "Hoy toca sudar. Mañana, presumir.",
+  "Los resultados llegan a quien vuelve una y otra vez.",
+  "Sin excusas. Solo series.",
+  "La barra no sabe si estás cansado. Levántala igual.",
+  "El progreso es lento, pero rendirse no lo acelera.",
+  "Respira, aprieta y empuja.",
+  "Hoy es un buen día para batir un récord.",
+  "No pares cuando estés cansado. Para cuando hayas terminado.",
+  "La fuerza se gana en los días que no apetece.",
+  "Cada entreno es un ladrillo. Sigue construyendo.",
+  "Lo difícil de hoy es lo normal de mañana.",
+  "Tu mejor rival está en el espejo.",
+  "Calienta bien, entrena mejor.",
+  "Primero la técnica, luego los kilos.",
+  "El gimnasio no cambia tu cuerpo en un día, pero cambia tu día.",
+  "Suma una repetición, suma un kilo, suma un día.",
+  "Hoy entrenas por el que quieres ser.",
+  "La pereza dura cinco minutos. El orgullo, todo el día.",
+  "Céntrate en la siguiente serie. Solo en esa.",
+  "Lento también es progreso.",
+  "Hazlo bien, hazlo fuerte, hazlo otra vez.",
+  "Los récords se rompen a base de días normales.",
+  "Tú decides si hoy es un día más o un día mejor.",
+  "Ninguna gráfica sube sola.",
+  "Que el descanso sea entre series, no entre semanas.",
+];
+function quoteOfDay() {
+  const d = new Date();
+  const day = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  return QUOTES[(day * 7) % QUOTES.length]; // ×7 para que días seguidos no den frases seguidas de la lista
+}
+
 // ---------- Pantalla: Hoy ----------
 function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutines }) {
   const ordered = routines;
@@ -225,6 +279,7 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
   return html`<section class="view">
     <header class="view-head">
       <p class="eyebrow">${new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</p>
+      <p class="daily-quote">${quoteOfDay()}</p>
       <h1>${routine ? "Hoy toca" : "Bienvenido"}</h1>
     </header>
 
