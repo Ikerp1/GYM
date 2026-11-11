@@ -72,7 +72,9 @@ p { margin: 0; }
 .view { display: grid; gap: 14px; }
 .view-head { display: grid; gap: 4px; padding: 6px 0 4px; }
 .view-head.row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.daily-quote { font-size: 15px; line-height: 1.4; font-style: italic; color: var(--fg); opacity: .85; border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; margin: 4px 0 6px; max-width: 34ch; text-wrap: pretty; }
+.daily-quote { border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; margin: 4px 0 6px; max-width: 36ch; display: grid; gap: 3px; }
+.daily-quote blockquote { margin: 0; font-size: 15px; line-height: 1.45; font-style: italic; color: var(--fg); opacity: .88; text-wrap: pretty; }
+.daily-quote figcaption { font-size: 12px; color: var(--muted); letter-spacing: .02em; }
 .section-title { font-size: 24px; text-transform: uppercase; margin-top: 10px; }
 
 /* Barra inferior */
