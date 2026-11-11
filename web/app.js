@@ -727,6 +727,59 @@ function FriendsView({ uid, mySummary, toast }) {
   </section>`;
 }
 
+// ---------- Barra inferior con el bíceps que salta ----------
+// El bíceps ocupa el lugar del icono de la pestaña activa. Al cambiar de pestaña, salta en arco
+// desde la anterior hasta la nueva y, al llegar, "hace fuerza" (se hincha un momento).
+const BICEP = html`<svg class="bicep" viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M3.6 18.2H18.2L15.4 6.4" class="bicep-arm" />
+  <circle cx="9.4" cy="14.4" r="4.9" class="bicep-fill" />
+  <circle cx="13.9" cy="4.6" r="3.7" class="bicep-fill" />
+  <path d="M14.6 17c-.2-2.3-.8-4.3-1.7-6" class="bicep-line" />
+</svg>`;
+
+function TabBar({ tabs, tab, onTab, live }) {
+  const navRef = useRef(null);
+  const flyRef = useRef(null);
+  const prevX = useRef(null);
+  const centerOf = (id) => {
+    const b = navRef.current?.querySelector(`[data-tab="${id}"] .tab-icon`);
+    const n = navRef.current?.getBoundingClientRect();
+    if (!b || !n) return null;
+    const r = b.getBoundingClientRect();
+    return { x: r.left - n.left + r.width / 2, y: r.top - n.top + r.height / 2 };
+  };
+  const place = (animate) => {
+    const el = flyRef.current, to = centerOf(tab);
+    if (!el || !to) return;
+    const end = `translate(${to.x}px, ${to.y}px)`;
+    const from = prevX.current;
+    prevX.current = to;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.style.transform = end;
+    if (!animate || !from || from.x === to.x || reduce || !el.animate) return;
+    const mid = (from.x + to.x) / 2, dist = Math.abs(to.x - from.x);
+    const dir = to.x > from.x ? 1 : -1;
+    // Cada tramo con su propio ritmo: sube frenando, cae acelerando, se hincha y vuelve a su tamaño.
+    el.animate([
+      { transform: `translate(${from.x}px, ${from.y}px) rotate(0deg) scale(1)`, easing: "cubic-bezier(.2,.7,.4,1)" },
+      { transform: `translate(${mid}px, ${from.y - 18 - dist * 0.06}px) rotate(${dir * 18}deg) scale(1.05)`, offset: 0.36, easing: "cubic-bezier(.6,0,.9,.5)" },
+      { transform: `translate(${to.x}px, ${to.y}px) rotate(0deg) scale(0.88)`, offset: 0.6, easing: "cubic-bezier(.2,.8,.3,1)" },
+      { transform: `translate(${to.x}px, ${to.y}px) rotate(0deg) scale(1.45)`, offset: 0.78, easing: "ease-in-out" },
+      { transform: end + " rotate(0deg) scale(1)" },
+    ], { duration: 780, easing: "linear" });
+  };
+  useEffect(() => { place(true); }, [tab]);
+  useEffect(() => {
+    const onResize = () => { prevX.current = null; place(false); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [tab]);
+  return html`<nav class="tabbar" ref=${navRef}>
+    ${tabs.map(([id, label, icon]) => html`<button data-tab=${id} class=${tab === id ? "on" : ""} aria-current=${tab === id ? "page" : undefined} onClick=${() => onTab(id)}><span class="tab-icon">${icon}</span><span>${label}</span>${id === "hoy" && live ? html`<i class="live-dot"></i>` : ""}</button>`)}
+    <span class="tab-fly" ref=${flyRef}>${BICEP}</span>
+  </nav>`;
+}
+
 // ---------- App ----------
 function Login({ error }) {
   const [busy, setBusy] = useState(false);
@@ -881,9 +934,7 @@ function App() {
         : html`<${ProgressView} finished=${finished} exById=${exById} onDelete=${deleteWorkout} />`}
     </main>
     ${rest && html`<${RestBar} key=${rest.endsAt} rest=${rest} onChange=${setRest} />`}
-    <nav class="tabbar">
-      ${tabs.map(([id, label, icon]) => html`<button class=${tab === id ? "on" : ""} aria-current=${tab === id ? "page" : undefined} onClick=${() => setTab(id)}>${icon}<span>${label}</span>${id === "hoy" && active ? html`<i class="live-dot"></i>` : ""}</button>`)}
-    </nav>
+    <${TabBar} tabs=${tabs} tab=${tab} onTab=${setTab} live=${!!active} />
     ${editing && html`<${RoutineEditor} routine=${editing} exercises=${exercises} exById=${exById} onSave=${saveRoutine} onDelete=${deleteRoutine} onClose=${() => setEditing(null)} onCreateExercise=${createExercise} />`}
     ${summary && html`<${Summary} ...${summary} exById=${exById} onClose=${() => { setSummary(null); setTab("progreso"); }} />`}
     ${menu && html`<${Sheet} title="Tu cuenta" onClose=${() => setMenu(false)} footer=${html`<button class="btn ghost block" onClick=${() => { setMenu(false); logout(); }}>Cerrar sesión</button>`}>
