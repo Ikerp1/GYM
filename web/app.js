@@ -326,7 +326,7 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
           <button class="thumb-btn" aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}><${ExerciseFigure} exId=${it.exId} /></button>
           <div class="ex-title">
             <h3>${ex?.name || "Ejercicio"}</h3>
-            <p class="muted small">${prev.length ? `Última vez: ${setsText(prev)}` : "Primera vez con este ejercicio"}</p>
+            <p class="muted small">${prev.length ? `Última vez ${relDays(prev.when)}` : "Primera vez con este ejercicio"}</p>
           </div>
           <div class="ex-tools">
             <button class="icon-btn" aria-label="Subir" disabled=${i === 0} onClick=${() => move(i, -1)}>${I.up}</button>
@@ -335,9 +335,10 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
           </div>
         </header>
         <div class="sets">
-          <div class="set-row head"><span>Serie</span><span>kg</span><span>Reps</span><span></span></div>
+          <div class="set-row head"><span aria-label="Serie">#</span><span class="prev-col">Anterior</span><span>kg</span><span>Reps</span><span></span></div>
           ${it.sets.map((s, k) => html`<div class=${"set-row " + (s.done ? "is-done" : "")}>
             <button class="set-n" aria-label=${"Borrar serie " + (k + 1)} title="Mantén pulsado para borrar" onContextMenu=${(e) => { e.preventDefault(); removeSet(i, k); }}>${k + 1}</button>
+            <span class="prev-col prev-val" aria-label=${prev[k] ? `Anterior: ${fmtKg(prev[k].kg)} kilos, ${prev[k].reps} repeticiones` : "Sin dato anterior"}>${prev[k] ? html`${fmtKg(prev[k].kg)}<small> kg</small> × ${prev[k].reps ?? "—"}` : "—"}</span>
             <input id=${`kg-${i}-${k}`} class="num" inputmode="decimal" enterkeyhint="next" aria-label=${`Peso serie ${k + 1}`} value=${s.kg == null ? "" : String(s.kg).replace(".", ",")} placeholder="0" onFocus=${(e) => e.target.select()} onInput=${(e) => setSet(i, k, { kg: num(e.target.value) })} />
             <input id=${`reps-${i}-${k}`} class="num" inputmode="numeric" enterkeyhint="done" aria-label=${`Repeticiones serie ${k + 1}`} value=${s.reps ?? ""} placeholder="0" onFocus=${(e) => e.target.select()} onInput=${(e) => setSet(i, k, { reps: num(e.target.value) })} />
             <button class=${"check " + (s.done ? "on" : "")} aria-label=${s.done ? "Desmarcar serie" : "Marcar serie hecha"} aria-pressed=${s.done} onClick=${() => toggle(i, k)}>${I.check}</button>
@@ -582,7 +583,7 @@ function App() {
       if (w.id === excludeId) continue;
       const it = w.items.find((x) => x.exId === exId);
       const sets = it ? doneSets(it) : [];
-      if (sets.length) return sets;
+      if (sets.length) { sets.when = w.finishedAt; return sets; } // "when": fecha de ese entreno
     }
     return [];
   };
