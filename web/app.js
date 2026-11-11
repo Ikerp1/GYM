@@ -596,6 +596,7 @@ function StatsPanel({ finished, exById }) {
 }
 
 function ProgressView({ finished, exById, onDelete }) {
+  const [sheet, setSheet] = useState(null); // "ex" = progreso por ejercicio, "hist" = historial
   const [metric, setMetric] = useState("kg");
   const [open, setOpen] = useState(null);
   const [ask, setAsk] = useState(null);
@@ -634,8 +635,22 @@ function ProgressView({ finished, exById, onDelete }) {
     </div>
     <${StatsPanel} finished=${finished} exById=${exById} />
 
+    <div class="nav-list">
+      <button class="card nav-card" onClick=${() => setSheet("ex")}>
+        <span class="nav-icon">${I.chart}</span>
+        <span class="nav-text"><b>Progreso por ejercicio</b><small>${exIds.length ? `${exIds.length} ejercicios · gráfica y récords` : "Aparece cuando termines un entreno"}</small></span>
+        <span class="nav-arrow">${I.back}</span>
+      </button>
+      <button class="card nav-card" onClick=${() => setSheet("hist")}>
+        <span class="nav-icon">${I.list}</span>
+        <span class="nav-text"><b>Historial</b><small>${finished.length ? `${finished.length} entrenos · último ${relDays(finished[0].finishedAt)}` : "Todavía no hay entrenos"}</small></span>
+        <span class="nav-arrow">${I.back}</span>
+      </button>
+    </div>
+
+    ${sheet === "ex" && html`<${Sheet} title="Progreso por ejercicio" onClose=${() => setSheet(null)}>
     ${exIds.length ? html`
-      <section class="card">
+      <section class="sheet-section">
         <label class="field"><span>Ejercicio</span>
           <select id="progress-ex" class="input" value=${sel} onChange=${(e) => setExId(e.target.value)}>
             ${exIds.map((id) => html`<option value=${id}>${exById[id]?.name || id} (${byEx[id].length})</option>`)}
@@ -654,8 +669,10 @@ function ProgressView({ finished, exById, onDelete }) {
           ${bestVol && html`<li><span>Más volumen en un día</span><b>${Math.round(bestVol.v).toLocaleString("es-ES")} kg</b><small>${shortDate(bestVol.t)}</small></li>`}
         </ul>
       </section>` : html`<div class="empty">Cuando termines tu primer entreno, aquí verás tus gráficas y récords.</div>`}
+    </${Sheet}>`}
 
-    ${finished.length > 0 && html`<h2 class="section-title">Historial</h2>
+    ${sheet === "hist" && html`<${Sheet} title="Historial" onClose=${() => setSheet(null)}>
+    ${finished.length > 0 ? html`
       <ul class="history">
         ${finished.map((w) => html`<li class="card hist-card">
           <button class="hist-main" aria-expanded=${open === w.id} onClick=${() => setOpen(open === w.id ? null : w.id)}>
@@ -667,7 +684,8 @@ function ProgressView({ finished, exById, onDelete }) {
             <button class="btn link danger-text" onClick=${() => setAsk({ title: "Borrar entreno", text: `¿Borrar el entreno «${w.name}» del ${dayLabel(w.finishedAt)}? No se puede deshacer.`, yes: "Borrar", danger: true, onYes: () => onDelete(w) })}>Borrar este entreno</button>
           </div>`}
         </li>`)}
-      </ul>`}
+      </ul>` : html`<div class="empty">Todavía no hay entrenos guardados.</div>`}
+    </${Sheet}>`}
     ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}
   </section>`;
 }

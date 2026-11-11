@@ -268,6 +268,18 @@ svg.fig, svg.fig-big { stroke: none; fill: none; }
 .chart .bar.last { fill: var(--accent); }
 .chart .bar-val { fill: var(--fg); font: 600 10px var(--font-body); }
 
+/* Botones que abren secciones de Progress */
+.nav-list { display: grid; gap: 8px; }
+.nav-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; width: 100%; }
+.nav-card:active { transform: scale(.99); }
+.nav-icon { width: 42px; height: 42px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
+.nav-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.nav-text b { font: 700 20px var(--font-display); text-transform: uppercase; }
+.nav-text small { color: var(--muted); font-size: 13px; }
+.nav-arrow { color: var(--muted); display: grid; }
+.nav-arrow svg { transform: rotate(180deg); width: 18px; height: 18px; }
+.sheet-section { display: grid; gap: 10px; }
+
 /* Calendario de días entrenados (Progress) */
 .cal { gap: 8px; padding: 12px 14px 14px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
