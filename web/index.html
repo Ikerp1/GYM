@@ -278,6 +278,40 @@ svg.fig, svg.fig-big { stroke: none; fill: none; }
 .nav-btn:active { transform: scale(.97); background: var(--surface-2); }
 .sheet-section { display: grid; gap: 10px; }
 
+/* Por ejercicio: lista y estadísticas de un ejercicio */
+.ex-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ex-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 14px; background: var(--surface-2); text-align: left; }
+.ex-row:active { transform: scale(.99); }
+.ex-row-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ex-row-text b { font-weight: 700; }
+.ex-row-text small { color: var(--muted); font-size: 13px; }
+.ex-row-kg { font: 700 20px var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ex-row-kg small { font: 500 12px var(--font-body); color: var(--muted); }
+.exstats { display: grid; gap: 12px; }
+.exstats-head { display: grid; gap: 6px; justify-items: center; text-align: center; }
+.fig-stage.small { width: 100%; max-width: 200px; padding: 2px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.tiles.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tiles > div { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.tiles span { color: var(--muted); font-size: 12px; }
+.tiles b { font: 700 24px var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tiles b small { font: 500 13px var(--font-body); color: var(--muted); }
+.tiles b.tile-text { font-size: 20px; display: block; }
+.tiles b.tile-text::first-letter { text-transform: uppercase; }
+.tiles > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.gain { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.gain span { color: var(--muted); font-size: 12px; grid-column: 1 / -1; }
+.gain b { font: 700 20px var(--font-display); font-variant-numeric: tabular-nums; }
+.gain em { font: 700 18px var(--font-display); font-style: normal; color: var(--muted); }
+.gain.up { box-shadow: inset 3px 0 0 var(--ok); }
+.gain.up em { color: var(--ok); }
+.gain.down { box-shadow: inset 3px 0 0 var(--danger); }
+.gain.down em { color: var(--danger); }
+.pr-title.plain { color: var(--fg); font-size: 20px; margin-top: 4px; }
+.session-li { flex-direction: column; gap: 6px !important; }
+.session-date { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+.session-date::first-letter { text-transform: uppercase; }
+
 /* Calendario de días entrenados (Progress) */
 .cal { gap: 8px; padding: 12px 14px 14px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

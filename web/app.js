@@ -652,32 +652,98 @@ function StatsPanel({ finished, exById }) {
   </div>`;
 }
 
+// Estadísticas de un solo ejercicio. sessions: [{ t, sets: [{ kg, reps }] }] de la más antigua a la más reciente.
+function ExerciseStats({ exId, ex, sessions, onBack }) {
+  const [metric, setMetric] = useState("kg");
+  const all = sessions.flatMap((s) => s.sets.map((x) => ({ ...x, t: s.t })));
+  const volOf = (s) => s.sets.reduce((n, x) => n + x.kg * x.reps, 0);
+  const topOf = (s) => s.sets.reduce((a, x) => (x.kg > a.kg || (x.kg === a.kg && x.reps > a.reps) ? x : a));
+  const heaviest = all.reduce((a, b) => (b.kg > a.kg || (b.kg === a.kg && b.reps > a.reps) ? b : a));
+  const best1rm = all.reduce((a, b) => (e1rm(b.kg, b.reps) > e1rm(a.kg, a.reps) ? b : a));
+  const mostReps = all.reduce((a, b) => (b.reps > a.reps || (b.reps === a.reps && b.kg > a.kg) ? b : a));
+  const bestVol = sessions.reduce((a, s) => (volOf(s) > (a?.v ?? -1) ? { v: volOf(s), t: s.t } : a), null);
+  const totalSets = all.length, totalReps = all.reduce((n, x) => n + x.reps, 0), totalKg = all.reduce((n, x) => n + x.kg * x.reps, 0);
+  const firstTop = topOf(sessions[0]), lastTop = topOf(sessions.at(-1));
+  const gain = lastTop.kg - firstTop.kg;
+  const gainPct = firstTop.kg > 0 ? Math.round((gain / firstTop.kg) * 100) : null;
+  const bodyweight = heaviest.kg === 0;
+  const points = sessions.map((s) => ({
+    t: s.t,
+    v: metric === "kg" ? topOf(s).kg : metric === "1rm" ? Math.max(...s.sets.map((x) => e1rm(x.kg, x.reps))) : metric === "reps" ? Math.max(...s.sets.map((x) => x.reps)) : volOf(s),
+  }));
+  const metrics = bodyweight ? [["reps", "Máx. reps"]] : [["kg", "Peso máx."], ["1rm", "1RM est."], ["vol", "Volumen"]];
+  const m = metrics.some(([id]) => id === metric) ? metric : metrics[0][0];
+  const kg1 = (v) => fmtKg(Math.round(v * 10) / 10);
+
+  return html`<div class="exstats">
+    <button class="btn link back-link" onClick=${onBack}>${I.back} Todos los ejercicios</button>
+    <div class="exstats-head">
+      <div class="fig-stage small"><${ExerciseFigure} exId=${exId} animate=${true} cls="fig-big" /></div>
+      <p class="muted small">${ex?.group || ""}${ex?.group ? " · " : ""}${sessions.length} ${sessions.length === 1 ? "vez" : "veces"} · desde el ${shortDate(sessions[0].t)}</p>
+    </div>
+
+    <div class="tiles">
+      ${bodyweight
+        ? html`<div><span>Máx. repeticiones</span><b>${mostReps.reps}</b></div>`
+        : html`<div><span>Peso máximo</span><b>${fmtKg(heaviest.kg)}<small> kg × ${heaviest.reps}</small></b></div>
+               <div><span>1RM estimado</span><b>${kg1(e1rm(best1rm.kg, best1rm.reps))}<small> kg</small></b></div>`}
+      <div><span>Veces realizado</span><b>${sessions.length}</b></div>
+      <div><span>Última vez</span><b class="tile-text">${relDays(sessions.at(-1).t)}</b></div>
+    </div>
+
+    ${sessions.length > 1 && !bodyweight && html`<div class=${"gain " + (gain > 0 ? "up" : gain < 0 ? "down" : "")}>
+      <span>Desde el primer día</span>
+      <b>${fmtKg(firstTop.kg)} kg → ${fmtKg(lastTop.kg)} kg</b>
+      <em>${gain > 0 ? "+" : ""}${fmtKg(gain)} kg${gainPct != null ? ` (${gain > 0 ? "+" : ""}${gainPct}%)` : ""}</em>
+    </div>`}
+
+    ${metrics.length > 1 && html`<div class="seg" role="tablist">
+      ${metrics.map(([id, label]) => html`<button role="tab" aria-selected=${m === id} class=${m === id ? "on" : ""} onClick=${() => setMetric(id)}>${label}</button>`)}
+    </div>`}
+    <${LineChart} points=${points} unit=${m === "reps" ? "reps" : "kg"} />
+    <p class="muted small">${m === "kg" ? "Peso más alto que moviste cada día." : m === "1rm" ? "Peso que podrías levantar a una sola repetición, calculado con tus series (fórmula de Epley). Es orientativo." : m === "vol" ? "Kilos totales de ese ejercicio cada día (peso × repeticiones de todas las series)." : "Repeticiones de tu mejor serie cada día."}</p>
+
+    <h3 class="pr-title">${I.trophy} Récords</h3>
+    <ul class="pr-list">
+      ${!bodyweight && html`<li><span>Más peso</span><b>${fmtKg(heaviest.kg)} kg × ${heaviest.reps}</b><small>${shortDate(heaviest.t)}</small></li>`}
+      ${!bodyweight && html`<li><span>Mejor 1RM estimado</span><b>${kg1(e1rm(best1rm.kg, best1rm.reps))} kg</b><small>${fmtKg(best1rm.kg)} × ${best1rm.reps} · ${shortDate(best1rm.t)}</small></li>`}
+      <li><span>Más repeticiones en una serie</span><b>${mostReps.reps} reps${mostReps.kg > 0 ? ` con ${fmtKg(mostReps.kg)} kg` : ""}</b><small>${shortDate(mostReps.t)}</small></li>
+      ${!bodyweight && html`<li><span>Más volumen en un día</span><b>${Math.round(bestVol.v).toLocaleString("es-ES")} kg</b><small>${shortDate(bestVol.t)}</small></li>`}
+    </ul>
+
+    <h3 class="pr-title plain">Totales</h3>
+    <div class="tiles three">
+      <div><span>Series</span><b>${totalSets}</b></div>
+      <div><span>Repeticiones</span><b>${totalReps.toLocaleString("es-ES")}</b></div>
+      <div><span>Kilos</span><b>${Math.round(totalKg).toLocaleString("es-ES")}</b></div>
+    </div>
+
+    <h3 class="pr-title plain">Últimas sesiones</h3>
+    <ul class="day-list">${sessions.slice(-5).reverse().map((s) => html`<li class="session-li">
+      <span class="session-date">${dayLabel(s.t)}</span>
+      <span class="day-sets">${s.sets.map((x) => html`<span class="day-set">${x.kg > 0 ? html`${fmtKg(x.kg)}<small> kg</small> × ` : ""}${x.reps}${x.kg > 0 ? "" : html`<small> reps</small>`}</span>`)}</span>
+    </li>`)}</ul>
+  </div>`;
+}
+
 function ProgressView({ finished, exById, onDelete }) {
   const [sheet, setSheet] = useState(null); // "ex" = progreso por ejercicio, "hist" = historial
-  const [metric, setMetric] = useState("kg");
   const [open, setOpen] = useState(null);
   const [ask, setAsk] = useState(null);
-  // Ejercicios con datos, ordenados por número de entrenos.
+  const [exId, setExId] = useState(null); // ejercicio abierto dentro de "Por ejercicio"
+  // Sesiones de cada ejercicio (de la más antigua a la más reciente), solo series hechas con repeticiones.
   const byEx = useMemo(() => {
     const m = {};
     for (const w of [...finished].reverse()) {
       for (const it of w.items) {
-        const sets = doneSets(it).filter((s) => s.kg != null && s.reps);
+        const sets = doneSets(it).filter((s) => s.reps).map((s) => ({ kg: s.kg ?? 0, reps: s.reps }));
         if (!sets.length) continue;
         (m[it.exId] ??= []).push({ t: w.finishedAt, sets });
       }
     }
     return m;
   }, [finished]);
-  const exIds = Object.keys(byEx).sort((a, b) => byEx[b].length - byEx[a].length);
-  const [exId, setExId] = useState(null);
-  const sel = exId && byEx[exId] ? exId : exIds[0];
-  const sessions = sel ? byEx[sel] : [];
-  const points = sessions.map((s) => ({ t: s.t, v: metric === "kg" ? Math.max(...s.sets.map((x) => x.kg)) : Math.max(...s.sets.map((x) => e1rm(x.kg, x.reps))) }));
-  const best = sessions.flatMap((s) => s.sets.map((x) => ({ ...x, t: s.t })));
-  const heaviest = best.reduce((a, b) => (!a || b.kg > a.kg || (b.kg === a.kg && b.reps > a.reps) ? b : a), null);
-  const best1rm = best.reduce((a, b) => (!a || e1rm(b.kg, b.reps) > e1rm(a.kg, a.reps) ? b : a), null);
-  const bestVol = sessions.reduce((a, s) => { const v = s.sets.reduce((n, x) => n + x.kg * x.reps, 0); return !a || v > a.v ? { v, t: s.t } : a; }, null);
+  const exIds = Object.keys(byEx).sort((a, b) => byEx[b].length - byEx[a].length || byEx[b].at(-1).t - byEx[a].at(-1).t);
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const thisMonth = finished.filter((w) => w.finishedAt >= monthStart.getTime()).length;
   const weekStart = new Date(); weekStart.setHours(0, 0, 0, 0); weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
@@ -697,27 +763,21 @@ function ProgressView({ finished, exById, onDelete }) {
       <button class="nav-btn" aria-label="Historial de entrenos" onClick=${() => setSheet("hist")}>${I.list}<span>Historial</span></button>
     </div>
 
-    ${sheet === "ex" && html`<${Sheet} title="Progreso por ejercicio" onClose=${() => setSheet(null)}>
-    ${exIds.length ? html`
-      <section class="sheet-section">
-        <label class="field"><span>Ejercicio</span>
-          <select id="progress-ex" class="input" value=${sel} onChange=${(e) => setExId(e.target.value)}>
-            ${exIds.map((id) => html`<option value=${id}>${exById[id]?.name || id} (${byEx[id].length})</option>`)}
-          </select>
-        </label>
-        <div class="seg" role="tablist">
-          <button role="tab" aria-selected=${metric === "kg"} class=${metric === "kg" ? "on" : ""} onClick=${() => setMetric("kg")}>Peso máximo</button>
-          <button role="tab" aria-selected=${metric === "1rm"} class=${metric === "1rm" ? "on" : ""} onClick=${() => setMetric("1rm")}>1RM estimado</button>
-        </div>
-        <${LineChart} points=${points} unit="kg" />
-        ${metric === "1rm" && html`<p class="muted small">El 1RM estimado es el peso que podrías levantar a una sola repetición, calculado con tus series (fórmula de Epley). Es orientativo.</p>`}
-        <h3 class="pr-title">${I.trophy} Récords</h3>
-        <ul class="pr-list">
-          ${heaviest && html`<li><span>Peso máximo</span><b>${fmtKg(heaviest.kg)} kg × ${heaviest.reps}</b><small>${shortDate(heaviest.t)}</small></li>`}
-          ${best1rm && html`<li><span>Mejor 1RM estimado</span><b>${fmtKg(Math.round(e1rm(best1rm.kg, best1rm.reps) * 10) / 10)} kg</b><small>${shortDate(best1rm.t)}</small></li>`}
-          ${bestVol && html`<li><span>Más volumen en un día</span><b>${Math.round(bestVol.v).toLocaleString("es-ES")} kg</b><small>${shortDate(bestVol.t)}</small></li>`}
-        </ul>
-      </section>` : html`<div class="empty">Cuando termines tu primer entreno, aquí verás tus gráficas y récords.</div>`}
+    ${sheet === "ex" && html`<${Sheet} title=${exId && byEx[exId] ? exById[exId]?.name || "Ejercicio" : "Por ejercicio"} onClose=${() => { setSheet(null); setExId(null); }}>
+      ${exId && byEx[exId]
+        ? html`<${ExerciseStats} key=${exId} exId=${exId} ex=${exById[exId]} sessions=${byEx[exId]} onBack=${() => setExId(null)} />`
+        : exIds.length ? html`
+          <p class="muted small">${exIds.length} ${exIds.length === 1 ? "ejercicio hecho" : "ejercicios hechos"} al menos una vez. Toca uno para ver sus estadísticas.</p>
+          <ul class="ex-list">${exIds.map((id) => {
+            const ss = byEx[id];
+            const top = Math.max(...ss.flatMap((s) => s.sets.map((x) => x.kg)));
+            return html`<li><button class="ex-row" onClick=${() => setExId(id)}>
+              <${ExerciseFigure} exId=${id} />
+              <span class="ex-row-text"><b>${exById[id]?.name || "Ejercicio"}</b><small>${ss.length} ${ss.length === 1 ? "vez" : "veces"} · última ${relDays(ss.at(-1).t)}</small></span>
+              <span class="ex-row-kg">${top > 0 ? html`${fmtKg(top)}<small> kg</small>` : html`<small>peso corporal</small>`}</span>
+            </button></li>`;
+          })}</ul>`
+        : html`<div class="empty">Cuando termines tu primer entreno, aquí aparecerán tus ejercicios.</div>`}
     </${Sheet}>`}
 
     ${sheet === "hist" && html`<${Sheet} title="Historial" onClose=${() => setSheet(null)}>
