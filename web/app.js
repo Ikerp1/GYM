@@ -3,6 +3,8 @@
 import { html, render, useState, useEffect, useMemo, useRef } from "https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js";
 import { watchUser, login, logout, watchCollection, saveDoc, removeDoc, newId } from "./db.js";
 import { BUILTIN_EXERCISES, GROUPS } from "./exercises.js";
+import { FIGURES } from "./figures.js";
+import { drawExercise, phaseAt, VIEWBOX, viewBoxFor } from "./figure-engine.js";
 
 // ---------- Utilidades ----------
 const DEFAULT_REST = 90;
@@ -120,10 +122,36 @@ function ExercisePicker({ exercises, onPick, onCreate, onClose, title = "Añadir
       ${GROUPS.map((g) => html`<button class=${"chip " + (group === g ? "on" : "")} onClick=${() => setGroup(g)}>${g}</button>`)}
     </div>
     <ul class="pick-list">
-      ${list.map((e) => html`<li><button onClick=${() => onPick(e)}><span>${e.name}</span><small>${e.group}${e.custom ? " · propio" : ""}</small></button></li>`)}
+      ${list.map((e) => html`<li><button onClick=${() => onPick(e)}><${ExerciseFigure} exId=${e.id} /><span class="pick-name">${e.name}</span><small>${e.group}${e.custom ? " · propio" : ""}</small></button></li>`)}
     </ul>
     ${!list.length && html`<p class="muted center">No hay ningún ejercicio con ese nombre.</p>`}
     <button class="btn ghost block" onClick=${() => { setCreating(true); setNewName(q); setNewGroup(group || GROUPS[0]); }}>${I.plus} Crear ejercicio propio</button>
+  </${Sheet}>`;
+}
+
+// ---------- Siluetas de los ejercicios ----------
+// Miniatura fija (postura final, o la indicada en "thumb") o animación en bucle entre la postura inicial y la final.
+function ExerciseFigure({ exId, animate = false, cls = "thumb" }) {
+  const def = FIGURES[exId];
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!def || !animate || !ref.current) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let raf;
+    const start = performance.now();
+    const loop = (now) => { if (ref.current) ref.current.innerHTML = drawExercise(def, phaseAt(now - start)); raf = requestAnimationFrame(loop); };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [exId, animate]);
+  if (!def) return html`<span class=${cls + " fig-none"} aria-hidden="true">${I.today}</span>`;
+  return html`<svg ref=${ref} class=${cls + " fig"} viewBox=${animate ? VIEWBOX : viewBoxFor(def)} aria-hidden="true" dangerouslySetInnerHTML=${{ __html: drawExercise(def, animate ? 0 : def.thumb ?? 1) }}></svg>`;
+}
+
+// Ventana con la silueta en grande y animada.
+function ExerciseInfo({ ex, onClose }) {
+  return html`<${Sheet} title=${ex.name} onClose=${onClose}>
+    <div class="fig-stage"><${ExerciseFigure} exId=${ex.id} animate=${true} cls="fig-big" /></div>
+    <p class="muted center">${ex.group}${FIGURES[ex.id] ? "" : " · ejercicio propio, sin dibujo"}</p>
   </${Sheet}>`;
 }
 
@@ -186,6 +214,7 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
   const lastRoutineWorkout = finished.find((w) => w.routineId && ordered.some((r) => r.id === w.routineId));
   const nextIdx = lastRoutineWorkout ? (ordered.findIndex((r) => r.id === lastRoutineWorkout.routineId) + 1) % ordered.length : 0;
   const [pickedId, setPickedId] = useState(null);
+  const [info, setInfo] = useState(null);
   const routine = ordered.find((r) => r.id === pickedId) || ordered[nextIdx];
   const last = finished[0];
   const lastOfThis = routine && finished.find((w) => w.routineId === routine.id);
@@ -205,10 +234,12 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
         <ul class="plan">
           ${routine.items.map((it) => {
             const top = Math.max(0, ...lastSetsFor(it.exId).map((s) => s.kg || 0));
-            return html`<li>
-              <span class="plan-name">${exById[it.exId]?.name || "Ejercicio"}</span>
+            const ex = exById[it.exId];
+            return html`<li><button class="plan-row" aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}>
+              <${ExerciseFigure} exId=${it.exId} />
+              <span class="plan-name">${ex?.name || "Ejercicio"}</span>
               <span class="plan-meta">${it.sets}×${it.reps}${top > 0 ? html` · <b>${fmtKg(top)} kg</b>` : ""}</span>
-            </li>`;
+            </button></li>`;
           })}
         </ul>
         <button class="btn primary big block" onClick=${() => { unlockAudio(); onStart(routine); }}>Empezar ${routine.name}</button>
@@ -234,6 +265,7 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
         <h3>${last.name}</h3>
         <p class="muted">${minutes(last.startedAt, last.finishedAt)} min · ${last.items.reduce((n, it) => n + doneSets(it).length, 0)} series</p>
       </section>`}
+    ${info && html`<${ExerciseInfo} ex=${info} onClose=${() => setInfo(null)} />`}
   </section>`;
 }
 
@@ -242,6 +274,7 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
   const [w, setW] = useState(workout);
   const [picker, setPicker] = useState(false);
   const [ask, setAsk] = useState(null);
+  const [info, setInfo] = useState(null);
   const timer = useRef(null);
   const latest = useRef(w);
   const now = useNow(1000);
@@ -290,7 +323,8 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
       const prev = lastSetsFor(it.exId, w.id);
       return html`<article class="card ex-card">
         <header class="ex-head">
-          <div>
+          <button class="thumb-btn" aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}><${ExerciseFigure} exId=${it.exId} /></button>
+          <div class="ex-title">
             <h3>${ex?.name || "Ejercicio"}</h3>
             <p class="muted small">${prev.length ? `Última vez: ${setsText(prev)}` : "Primera vez con este ejercicio"}</p>
           </div>
@@ -328,6 +362,7 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
 
     ${picker && html`<${ExercisePicker} exercises=${exercises} onPick=${addExercise} onCreate=${onCreateExercise} onClose=${() => setPicker(false)} />`}
     ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}
+    ${info && html`<${ExerciseInfo} ex=${info} onClose=${() => setInfo(null)} />`}
   </section>`;
 }
 
@@ -363,6 +398,7 @@ function RoutineEditor({ routine, exercises, exById, onSave, onDelete, onClose, 
     <ul class="edit-list">
       ${r.items.map((it, i) => html`<li class="edit-item">
         <div class="edit-top">
+          <${ExerciseFigure} exId=${it.exId} />
           <b>${exById[it.exId]?.name || "Ejercicio"}</b>
           <div class="ex-tools">
             <button class="icon-btn" aria-label="Subir" disabled=${i === 0} onClick=${() => move(i, -1)}>${I.up}</button>

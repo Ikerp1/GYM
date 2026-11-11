@@ -31,6 +31,9 @@
   --ok: #3ecf8e;
   --ok-soft: rgba(62, 207, 142, .13);
   --danger: #f0605d;
+  --fig: #e4e7eb;
+  --fig-far: #69707a;
+  --eq: #474d55;
   --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius: 16px;
@@ -101,8 +104,9 @@ p { margin: 0; }
 .hero-top { display: grid; gap: 4px; }
 .hero-title { font-size: 46px; text-transform: uppercase; color: var(--accent); }
 .plan { list-style: none; margin: 0; padding: 0; display: grid; }
-.plan li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-.plan-name { font-weight: 600; }
+.plan li { border-top: 1px solid var(--line); }
+.plan-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 0; text-align: left; }
+.plan-name { font-weight: 600; flex: 1; min-width: 0; }
 .plan-meta { color: var(--muted); font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .plan-meta b { color: var(--fg); }
 .other-routines { display: grid; gap: 8px; }
@@ -116,8 +120,9 @@ p { margin: 0; }
 
 /* Entreno */
 .ex-card { gap: 10px; }
-.ex-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-.ex-head > div:first-child { min-width: 0; display: grid; gap: 3px; }
+.ex-head { display: flex; gap: 10px; align-items: flex-start; }
+.ex-title { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.thumb-btn { flex-shrink: 0; border-radius: 12px; }
 .ex-tools { display: flex; gap: 2px; flex-shrink: 0; }
 .ex-tools.vertical { flex-direction: column; }
 .sets { display: grid; gap: 6px; }
@@ -164,7 +169,8 @@ p { margin: 0; }
 .search .input { padding-left: 42px; }
 .search-icon { position: absolute; left: 12px; top: 13px; color: var(--muted); display: grid; }
 .pick-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.pick-list button { width: 100%; min-height: 54px; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); text-align: left; font-weight: 600; }
+.pick-list button { width: 100%; min-height: 60px; display: flex; align-items: center; gap: 12px; padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; font-weight: 600; }
+.pick-name { flex: 1; min-width: 0; }
 .pick-list small { color: var(--muted); font-weight: 500; white-space: nowrap; }
 .stepper { display: inline-flex; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; height: 46px; }
 .stepper button { width: 42px; height: 100%; font-size: 22px; font-weight: 700; color: var(--accent); }
@@ -182,7 +188,24 @@ p { margin: 0; }
 .edit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .edit-item { background: var(--surface-2); border-radius: 14px; padding: 10px 10px 12px 14px; display: grid; gap: 10px; }
 .edit-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.edit-top b { min-width: 0; }
+.edit-top b { min-width: 0; flex: 1; }
+
+/* Siluetas de ejercicios */
+.thumb { width: 48px; height: 48px; flex-shrink: 0; border-radius: 10px; background: var(--bg); }
+.fig-none { display: grid; place-items: center; color: var(--line); }
+.fig-none svg { width: 26px; height: 26px; }
+.fig-stage { background: radial-gradient(circle at 50% 40%, #1d2025, var(--bg) 75%); border: 1px solid var(--line); border-radius: 18px; padding: 8px; }
+.fig-big { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto; }
+svg.fig, svg.fig-big { stroke: none; fill: none; }
+.fig .limb, .fig-big .limb { fill: none; stroke: var(--fig); stroke-linecap: round; stroke-linejoin: round; }
+.fig .limb.far, .fig-big .limb.far { stroke: var(--fig-far); }
+.fig .head, .fig .joint, .fig-big .head, .fig-big .joint { fill: var(--fig); }
+.fig .joint.far, .fig-big .joint.far { fill: var(--fig-far); }
+.fig .eq, .fig-big .eq { stroke: var(--eq); stroke-linecap: round; fill: none; }
+.fig .eq-fill, .fig-big .eq-fill { fill: var(--eq); }
+.fig .load, .fig-big .load { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 3; }
+.fig .cable, .fig-big .cable { stroke: var(--muted); stroke-dasharray: 3 3; }
+.fig .floor, .fig-big .floor { stroke: var(--line); }
 .edit-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; }
 .edit-controls label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .edit-controls .stepper { background: var(--surface); }
