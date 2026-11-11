@@ -32,6 +32,8 @@
   --ok-soft: rgba(62, 207, 142, .13);
   --danger: #f0605d;
   --hint: #5f666f;
+  --friend: #5ab0f2;
+  --friend-soft: rgba(90, 176, 242, .14);
   --fig: #e4e7eb;
   --fig-far: #69707a;
   --eq: #474d55;
@@ -243,6 +245,43 @@ svg.fig, svg.fig-big { stroke: none; fill: none; }
 .hist-main span:first-child { display: grid; gap: 2px; min-width: 0; }
 .hist-main small { color: var(--muted); font-size: 14px; }
 .hist-detail { padding: 0 16px 10px; display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* Amigos */
+.warn { background: rgba(240, 96, 93, .12); border: 1px solid rgba(240, 96, 93, .4); color: #ffb3b1; border-radius: 14px; padding: 12px 14px; font-size: 14px; }
+.code-card { gap: 12px; }
+.code-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.code { font: 700 44px var(--font-display); letter-spacing: .18em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.add-row { display: flex; gap: 8px; }
+.code-input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .2em; font: 700 22px var(--font-display); text-align: center; }
+.code-input::placeholder { letter-spacing: .1em; color: var(--hint); }
+.friend-row { justify-content: flex-start; }
+.friend-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.friend-info small { color: var(--muted); font-size: 14px; }
+.avatar.big { width: 64px; height: 64px; font-size: 26px; border: 3px solid var(--accent); }
+.avatar.friend { border-color: var(--friend); }
+.back-link { justify-self: start; padding: 0; gap: 4px; }
+.vs-head { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 6px 0 4px; }
+.vs-side { display: grid; justify-items: center; gap: 6px; }
+.vs-side b { font: 700 20px var(--font-display); text-transform: uppercase; }
+.vs { font: 700 30px var(--font-display); color: var(--muted); }
+.vs-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.vs-row span { color: var(--muted); font-size: 14px; text-align: center; }
+.vs-row b { font: 700 28px var(--font-display); font-variant-numeric: tabular-nums; }
+.vs-row b:last-child { text-align: right; }
+.win { color: var(--accent); }
+.friend-text { color: var(--fg); }
+.friend-text.win { color: var(--friend); }
+.vs-ex { justify-content: flex-start; gap: 12px; }
+.vs-ex-name { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.vs-ex-name small { color: var(--muted); font-size: 13px; }
+.vs-ex-vals { display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }
+.vs-ex-vals b { font: 700 19px var(--font-display); }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--muted); }
+.key { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+.key.me { background: var(--accent); }
+.key.friend { background: var(--friend); margin-left: 8px; }
+.chart .line.friend { stroke: var(--friend); }
+.chart .dot.friend { stroke: var(--friend); }
 
 /* Inicio de sesión */
 .login { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 16px; text-align: center; padding: 24px max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left)); max-width: 420px; margin: 0 auto; }

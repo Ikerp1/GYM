@@ -1,7 +1,7 @@
 // GYM — app principal.
 // Pantallas: Hoy (rutina que toca + entreno en curso), Rutinas, Progreso.
 import { html, render, useState, useEffect, useMemo, useRef } from "https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js";
-import { watchUser, login, logout, watchCollection, saveDoc, removeDoc, newId } from "./db.js";
+import { watchUser, login, logout, watchCollection, saveDoc, removeDoc, newId, watchDoc, readDoc, mergeDoc, addToList, removeFromList } from "./db.js";
 import { BUILTIN_EXERCISES, GROUPS } from "./exercises.js";
 import { FIGURES } from "./figures.js";
 import { drawExercise, phaseAt, VIEWBOX, viewBoxFor } from "./figure-engine.js";
@@ -62,6 +62,8 @@ const I = {
   trophy: html`<svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5a3 3 0 003 4M16 6h3a3 3 0 01-3 4M12 13v4M8.5 20h7"/></svg>`,
   timer: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4"/></svg>`,
   back: html`<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>`,
+  users: html`<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.4c1.7.8 2.9 2.6 3.4 5.1"/></svg>`,
+  copy: html`<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/></svg>`,
 };
 
 // ---------- Componentes base ----------
@@ -530,6 +532,201 @@ function ProgressView({ finished, exById, onDelete }) {
   </section>`;
 }
 
+// ---------- Amigos ----------
+// Cada usuario publica un resumen en shared/{uid} (nombre, récords, evolución, fechas de entrenos).
+// Solo pueden leerlo los uid que estén en su lista "friends". Los códigos de amigo están en codes/{código}.
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin O/0 ni I/1 para que no se confundan
+const makeCode = () => Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
+
+// Resumen que ve un amigo. Se calcula de tus entrenos terminados.
+function buildSummary(finished, exById, user) {
+  const exercises = {};
+  for (const w of [...finished].reverse()) {
+    for (const it of w.items) {
+      const sets = doneSets(it).filter((s) => s.kg != null && s.reps);
+      if (!sets.length) continue;
+      const e = (exercises[it.exId] ??= { name: exById[it.exId]?.name || "Ejercicio", best: null, best1rm: 0, series: [] });
+      const top = sets.reduce((a, s) => (s.kg > a.kg || (s.kg === a.kg && s.reps > a.reps) ? s : a));
+      e.series.push({ t: w.finishedAt, kg: top.kg });
+      if (!e.best || top.kg > e.best.kg || (top.kg === e.best.kg && top.reps > e.best.reps)) e.best = { kg: top.kg, reps: top.reps, t: w.finishedAt };
+      for (const s of sets) e.best1rm = Math.max(e.best1rm, Math.round(e1rm(s.kg, s.reps) * 10) / 10);
+    }
+  }
+  for (const e of Object.values(exercises)) e.series = e.series.slice(-40);
+  return { name: user.displayName || "Sin nombre", photo: user.photoURL || null, dates: finished.slice(0, 150).map((w) => w.finishedAt), exercises };
+}
+const countSince = (dates = [], from) => dates.filter((t) => t >= from).length;
+const weekStartMs = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+const monthStartMs = () => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
+function Avatar({ name, photo, cls = "avatar" }) {
+  return html`<span class=${cls}>${photo ? html`<img src=${photo} alt="" referrerpolicy="no-referrer" />` : (name || "?")[0]}</span>`;
+}
+
+// Gráfica con dos líneas: tú (ámbar) y tu amigo (azul).
+function DuoChart({ a, b }) {
+  const all = [...a, ...b];
+  if (all.length < 2) return html`<div class="empty small">Aún no hay datos suficientes para la gráfica.</div>`;
+  const W = 340, H = 180, padL = 36, padR = 12, padT = 14, padB = 24;
+  const t0 = Math.min(...all.map((p) => p.t)), t1 = Math.max(...all.map((p) => p.t));
+  let min = Math.min(...all.map((p) => p.kg)), max = Math.max(...all.map((p) => p.kg));
+  if (min === max) { min -= 1; max += 1; }
+  const span = max - min; min = Math.max(0, min - span * 0.1); max += span * 0.1;
+  const x = (t) => padL + (W - padL - padR) * (t1 === t0 ? 0.5 : (t - t0) / (t1 - t0));
+  const y = (v) => padT + (H - padT - padB) * (1 - (v - min) / (max - min));
+  const line = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.kg).toFixed(1)}`).join(" ");
+  const ticks = [min, (min + max) / 2, max];
+  return html`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución comparada del peso máximo">
+    ${ticks.map((t) => html`<g><line x1=${padL} x2=${W - padR} y1=${y(t)} y2=${y(t)} class="grid" /><text x=${padL - 6} y=${y(t) + 3} class="tick" text-anchor="end">${Math.round(t)}</text></g>`)}
+    <path d=${line(b)} class="line friend" />
+    ${b.map((p) => html`<circle cx=${x(p.t)} cy=${y(p.kg)} r="2.5" class="dot friend" />`)}
+    <path d=${line(a)} class="line" />
+    ${a.map((p) => html`<circle cx=${x(p.t)} cy=${y(p.kg)} r="2.5" class="dot" />`)}
+    <text x=${padL} y=${H - 6} class="tick" text-anchor="start">${shortDate(t0)}</text>
+    <text x=${W - padR} y=${H - 6} class="tick" text-anchor="end">${shortDate(t1)}</text>
+  </svg>`;
+}
+
+function CompareView({ me, them, onBack, onRemove }) {
+  const [open, setOpen] = useState(null);
+  const common = Object.keys(me.exercises || {}).filter((id) => them.exercises?.[id]).sort((p, q) => (me.exercises[q].series.length + them.exercises[q].series.length) - (me.exercises[p].series.length + them.exercises[p].series.length));
+  const rows = [["Esta semana", weekStartMs()], ["Este mes", monthStartMs()], ["En total", 0]];
+  const first = them.name.split(" ")[0];
+  return html`<section class="view">
+    <button class="btn link back-link" onClick=${onBack}>${I.back} Amigos</button>
+    <header class="vs-head">
+      <div class="vs-side"><${Avatar} name=${me.name} photo=${me.photo} cls="avatar big" /><b>Tú</b></div>
+      <span class="vs">VS</span>
+      <div class="vs-side"><${Avatar} name=${them.name} photo=${them.photo} cls="avatar big friend" /><b>${first}</b></div>
+    </header>
+    <section class="card">
+      <p class="eyebrow">Entrenos</p>
+      ${rows.map(([label, from]) => {
+        const a = countSince(me.dates, from), b = countSince(them.dates, from);
+        return html`<div class="vs-row"><b class=${a > b ? "win" : ""}>${a}</b><span>${label}</span><b class=${b > a ? "win friend-text" : "friend-text"}>${b}</b></div>`;
+      })}
+    </section>
+    <h2 class="section-title">Ejercicios en común</h2>
+    ${common.length ? html`<ul class="history">${common.map((id) => {
+      const A = me.exercises[id], B = them.exercises[id];
+      const aWin = A.best1rm > B.best1rm, bWin = B.best1rm > A.best1rm;
+      return html`<li class="card hist-card">
+        <button class="hist-main vs-ex" aria-expanded=${open === id} onClick=${() => setOpen(open === id ? null : id)}>
+          <${ExerciseFigure} exId=${id} />
+          <span class="vs-ex-name"><b>${A.name}</b><small>Récord de peso</small></span>
+          <span class="vs-ex-vals"><b class=${aWin ? "win" : ""}>${fmtKg(A.best.kg)}×${A.best.reps}</b><b class=${"friend-text " + (bWin ? "win" : "")}>${fmtKg(B.best.kg)}×${B.best.reps}</b></span>
+        </button>
+        ${open === id && html`<div class="hist-detail">
+          <div class="legend"><span class="key me"></span>Tú · 1RM est. ${fmtKg(A.best1rm)} kg<span class="key friend"></span>${first} · ${fmtKg(B.best1rm)} kg</div>
+          <${DuoChart} a=${A.series} b=${B.series} />
+          <p class="muted small">Peso máximo de cada entreno. Gana quien tenga mejor 1RM estimado (tiene en cuenta peso y repeticiones).</p>
+        </div>`}
+      </li>`;
+    })}</ul>` : html`<div class="empty">Todavía no habéis hecho ningún ejercicio en común. Cuando los dos terminéis un entreno con el mismo ejercicio, aparecerá aquí.</div>`}
+    <button class="btn link danger-text block" onClick=${onRemove}>Quitar a ${first} de mis amigos</button>
+  </section>`;
+}
+
+function FriendsView({ uid, mySummary, toast }) {
+  const [profile, setProfile] = useState(undefined);
+  const [shared, setShared] = useState(undefined);
+  const [friendsData, setFriendsData] = useState({});
+  const [code, setCode] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState(null);
+  const [ask, setAsk] = useState(null);
+  const [rulesError, setRulesError] = useState(false);
+  const denied = (e) => { if (e?.code === "permission-denied") setRulesError(true); };
+
+  useEffect(() => watchDoc(["users", uid, "meta", "profile"], setProfile, () => setProfile(null)), [uid]);
+  useEffect(() => watchDoc(["shared", uid], setShared, (e) => { denied(e); setShared(null); }), [uid]);
+  // Crear tu código de amigo la primera vez.
+  useEffect(() => {
+    if (profile === undefined || profile?.code) return;
+    (async () => {
+      for (let i = 0; i < 5; i++) {
+        const c = makeCode();
+        try { await mergeDoc(["codes", c], { uid }); await mergeDoc(["users", uid, "meta", "profile"], { code: c }); return; }
+        catch (e) { denied(e); if (e?.code === "permission-denied" && i > 1) return; }
+      }
+    })();
+  }, [profile === undefined, profile?.code]);
+
+  const friends = shared?.friends || [];
+  useEffect(() => {
+    const offs = friends.map((f) => watchDoc(["shared", f], (d) => setFriendsData((m) => ({ ...m, [f]: d || "pending" })), () => setFriendsData((m) => ({ ...m, [f]: "pending" }))));
+    return () => offs.forEach((off) => off());
+  }, [friends.join(",")]);
+
+  const add = async () => {
+    const c = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (c.length !== 6) { setMsg("El código tiene 6 letras o números."); return; }
+    setBusy(true); setMsg("");
+    try {
+      const d = await readDoc(["codes", c]);
+      if (!d) setMsg("No hay nadie con ese código. Revisa que esté bien escrito.");
+      else if (d.uid === uid) setMsg("Ese es tu propio código.");
+      else if (friends.includes(d.uid)) setMsg("Ya lo tienes en tu lista.");
+      else {
+        await addToList(["shared", uid], "friends", d.uid);
+        await mergeDoc(["users", uid, "meta", "profile"], { friendCodes: { [d.uid]: c } });
+        setCode("");
+        setMsg("¡Añadido! Para que podáis compararos, él también tiene que añadirte con tu código.");
+      }
+    } catch (e) { denied(e); setMsg("No se pudo añadir. Inténtalo otra vez."); }
+    setBusy(false);
+  };
+  const remove = async (f) => { await removeFromList(["shared", uid], "friends", f); setSel(null); toast("Amigo quitado"); };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(profile.code); toast("Código copiado"); }
+    catch { toast(`Tu código es ${profile.code}`); }
+  };
+  const share = async () => {
+    const text = `¡Compárate conmigo en GYM! Entra en ${location.origin + location.pathname} con tu cuenta de Google, ve a Amigos y añade mi código: ${profile.code}`;
+    try { if (navigator.share) await navigator.share({ text }); else { await navigator.clipboard.writeText(text); toast("Mensaje copiado: pégalo en WhatsApp"); } } catch {}
+  };
+
+  const selData = sel && friendsData[sel];
+  if (sel && selData && selData !== "pending") {
+    return html`<${CompareView} me=${mySummary} them=${selData} onBack=${() => setSel(null)} onRemove=${() => setAsk({ title: "Quitar amigo", text: `¿Quitar a ${selData.name} de tus amigos? Dejará de ver tu progreso.`, yes: "Quitar", danger: true, onYes: () => remove(sel) })} />
+      ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}`;
+  }
+
+  return html`<section class="view">
+    <header class="view-head"><p class="eyebrow">Compárate con tus amigos</p><h1>Amigos</h1></header>
+    ${rulesError && html`<div class="warn">Falta actualizar las reglas de seguridad de Firebase para usar Amigos. Pídele a Claude el texto de las reglas.</div>`}
+    <section class="card code-card">
+      <p class="eyebrow">Tu código de amigo</p>
+      <div class="code-row">
+        <span class="code">${profile?.code || "······"}</span>
+        <button class="icon-btn" aria-label="Copiar código" disabled=${!profile?.code} onClick=${copy}>${I.copy}</button>
+      </div>
+      <button class="btn primary block" disabled=${!profile?.code} onClick=${share}>Invitar a un amigo</button>
+      <p class="muted small">Tu amigo entra en la app con su cuenta de Google, va a Amigos y escribe tu código. Tú haces lo mismo con el suyo.</p>
+    </section>
+    <section class="card">
+      <p class="eyebrow">Añadir amigo</p>
+      <div class="add-row">
+        <input id="friend-code" class="input code-input" placeholder="CÓDIGO" maxlength="8" autocapitalize="characters" autocomplete="off" value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} onKeyDown=${(e) => e.key === "Enter" && add()} />
+        <button class="btn primary" disabled=${busy || !code.trim()} onClick=${add}>Añadir</button>
+      </div>
+      ${msg && html`<p class="small" role="status">${msg}</p>`}
+    </section>
+    ${friends.length > 0 && html`<h2 class="section-title">Tus amigos</h2>
+      <ul class="history">${friends.map((f) => {
+        const d = friendsData[f];
+        const pending = !d || d === "pending";
+        return html`<li class="card hist-card"><button class="hist-main friend-row" onClick=${() => (pending ? setAsk({ title: "Esperando", text: `Todavía no puedes ver su progreso: tiene que añadirte con tu código (${profile?.code}). ¿Quieres quitarlo de la lista?`, yes: "Quitar", danger: true, onYes: () => remove(f) }) : setSel(f))}>
+          ${pending ? html`<span class="avatar">?</span>` : html`<${Avatar} name=${d.name} photo=${d.photo} />`}
+          <span class="friend-info"><b>${pending ? `Código ${profile?.friendCodes?.[f] || ""}` : d.name}</b><small>${pending ? "Esperando a que te añada" : `${countSince(d.dates, weekStartMs())} entrenos esta semana`}</small></span>
+          ${!pending && html`<span class="pill accent">Comparar</span>`}
+        </button></li>`;
+      })}</ul>`}
+    ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}
+  </section>`;
+}
+
 // ---------- App ----------
 function Login({ error }) {
   const [busy, setBusy] = useState(false);
@@ -579,6 +776,21 @@ function App() {
   const exById = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
   const finished = useMemo(() => workouts.filter((w) => w.finishedAt).sort((a, b) => b.finishedAt - a.finishedAt), [workouts]);
   const active = workouts.find((w) => !w.finishedAt);
+
+  // Resumen para tus amigos: se publica en shared/{uid} solo cuando cambia.
+  const mySummary = useMemo(() => (user ? buildSummary(finished, exById, user) : null), [finished, exById, user?.uid]);
+  const lastPublished = useRef("");
+  useEffect(() => {
+    if (!user || !loaded || !mySummary) return;
+    const json = JSON.stringify(mySummary);
+    const key = "gym-shared-" + user.uid;
+    let prev = lastPublished.current;
+    try { prev ||= localStorage.getItem(key) || ""; } catch {}
+    if (json === prev) return;
+    mergeDoc(["shared", user.uid], { ...mySummary, updatedAt: Date.now() })
+      .then(() => { lastPublished.current = json; try { localStorage.setItem(key, json); } catch {} })
+      .catch(() => {}); // si las reglas aún no están actualizadas, se reintenta en el próximo cambio
+  }, [mySummary, loaded]);
 
   // Series de la última vez que hiciste un ejercicio (solo las marcadas como hechas).
   const lastSetsFor = (exId, excludeId) => {
@@ -652,7 +864,7 @@ function App() {
   const lastRoutineWorkout = finished.find((w) => w.routineId && routines.some((r) => r.id === w.routineId));
   const nextId = routines.length ? routines[lastRoutineWorkout ? (routines.findIndex((r) => r.id === lastRoutineWorkout.routineId) + 1) % routines.length : 0].id : null;
 
-  const tabs = [["hoy", active ? "Entreno" : "Hoy", I.today], ["rutinas", "Rutinas", I.list], ["progreso", "Progreso", I.chart]];
+  const tabs = [["hoy", active ? "Entreno" : "Hoy", I.today], ["rutinas", "Rutinas", I.list], ["progreso", "Progreso", I.chart], ["amigos", "Amigos", I.users]];
 
   return html`<div class="app">
     <header class="topbar">
@@ -665,6 +877,7 @@ function App() {
           ? html`<${WorkoutView} key=${active.id} workout=${active} exercises=${exercises} exById=${exById} lastSetsFor=${lastSetsFor} onSave=${saveWorkout} onFinish=${finishWorkout} onDiscard=${discardWorkout} onRest=${startRest} onCreateExercise=${createExercise} />`
           : html`<${TodayView} routines=${routines} finished=${finished} exById=${exById} lastSetsFor=${lastSetsFor} onStart=${startWorkout} goRoutines=${() => { setTab("rutinas"); setEditing({ id: newId(), name: "", items: [], isNew: true }); }} />`)
         : tab === "rutinas" ? html`<${RoutinesView} routines=${routines} exById=${exById} nextId=${nextId} onEdit=${(r) => setEditing(r)} onNew=${() => setEditing({ id: newId(), name: "", items: [], isNew: true })} onReorder=${reorder} />`
+        : tab === "amigos" ? html`<${FriendsView} uid=${uid} mySummary=${mySummary} toast=${setToast} />`
         : html`<${ProgressView} finished=${finished} exById=${exById} onDelete=${deleteWorkout} />`}
     </main>
     ${rest && html`<${RestBar} key=${rest.endsAt} rest=${rest} onChange=${setRest} />`}

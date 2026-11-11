@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, setDoc, deleteDoc, onSnapshot,
+  collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, arrayUnion, arrayRemove,
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -51,4 +51,14 @@ export function watchCollection(uid, name, cb, onError) {
 
 export const saveDoc = (uid, name, id, data) => setDoc(doc(db, "users", uid, name, id), clean(data));
 export const removeDoc = (uid, name, id) => deleteDoc(doc(db, "users", uid, name, id));
+// ---------- Documentos sueltos (amigos) ----------
+// path es una lista: ["shared", uid], ["codes", "K7M2QX"], ["users", uid, "meta", "profile"]...
+/** Escucha un documento. cb(null) si no existe; onError si no tienes permiso para leerlo. */
+export const watchDoc = (path, cb, onError) =>
+  onSnapshot(doc(db, ...path), (s) => cb(s.exists() ? s.data() : null), (err) => onError?.(err));
+export const readDoc = async (path) => { const s = await getDoc(doc(db, ...path)); return s.exists() ? s.data() : null; };
+export const mergeDoc = (path, data) => setDoc(doc(db, ...path), clean(data), { merge: true });
+export const addToList = (path, field, value) => setDoc(doc(db, ...path), { [field]: arrayUnion(value) }, { merge: true });
+export const removeFromList = (path, field, value) => setDoc(doc(db, ...path), { [field]: arrayRemove(value) }, { merge: true });
+
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
