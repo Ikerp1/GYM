@@ -269,15 +269,10 @@ svg.fig, svg.fig-big { stroke: none; fill: none; }
 .chart .bar-val { fill: var(--fg); font: 600 10px var(--font-body); }
 
 /* Botones que abren secciones de Progress */
-.nav-list { display: grid; gap: 8px; }
-.nav-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; width: 100%; }
-.nav-card:active { transform: scale(.99); }
-.nav-icon { width: 42px; height: 42px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
-.nav-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.nav-text b { font: 700 20px var(--font-display); text-transform: uppercase; }
-.nav-text small { color: var(--muted); font-size: 13px; }
-.nav-arrow { color: var(--muted); display: grid; }
-.nav-arrow svg { transform: rotate(180deg); width: 18px; height: 18px; }
+.nav-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.nav-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 14px 0 11px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); color: var(--fg); font-weight: 600; font-size: 14px; }
+.nav-btn svg { width: 18px; height: 18px; color: var(--accent); }
+.nav-btn:active { transform: scale(.97); background: var(--surface-2); }
 .sheet-section { display: grid; gap: 10px; }
 
 /* Calendario de días entrenados (Progress) */

@@ -636,16 +636,8 @@ function ProgressView({ finished, exById, onDelete }) {
     <${StatsPanel} finished=${finished} exById=${exById} />
 
     <div class="nav-list">
-      <button class="card nav-card" onClick=${() => setSheet("ex")}>
-        <span class="nav-icon">${I.chart}</span>
-        <span class="nav-text"><b>Progreso por ejercicio</b><small>${exIds.length ? `${exIds.length} ejercicios · gráfica y récords` : "Aparece cuando termines un entreno"}</small></span>
-        <span class="nav-arrow">${I.back}</span>
-      </button>
-      <button class="card nav-card" onClick=${() => setSheet("hist")}>
-        <span class="nav-icon">${I.list}</span>
-        <span class="nav-text"><b>Historial</b><small>${finished.length ? `${finished.length} entrenos · último ${relDays(finished[0].finishedAt)}` : "Todavía no hay entrenos"}</small></span>
-        <span class="nav-arrow">${I.back}</span>
-      </button>
+      <button class="nav-btn" aria-label="Progreso por ejercicio: gráfica y récords" onClick=${() => setSheet("ex")}>${I.chart}<span>Por ejercicio</span></button>
+      <button class="nav-btn" aria-label="Historial de entrenos" onClick=${() => setSheet("hist")}>${I.list}<span>Historial</span></button>
     </div>
 
     ${sheet === "ex" && html`<${Sheet} title="Progreso por ejercicio" onClose=${() => setSheet(null)}>
