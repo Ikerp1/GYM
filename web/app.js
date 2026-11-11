@@ -233,7 +233,7 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
         </div>
         <ul class="plan">
           ${routine.items.map((it) => {
-            const top = Math.max(0, ...lastSetsFor(it.exId).map((s) => s.kg || 0));
+            const top = Math.max(0, ...lastSetsFor(it.exId).map((s) => s.kg || 0)) || it.kg || 0;
             const ex = exById[it.exId];
             return html`<li><button class="plan-row" aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}>
               <${ExerciseFigure} exId=${it.exId} />
@@ -395,6 +395,7 @@ function RoutineEditor({ routine, exercises, exById, onSave, onDelete, onClose, 
       <button class="btn primary" disabled=${!r.name.trim() || !r.items.length} onClick=${() => onSave(r)}>Guardar</button>`}>
     <label class="field"><span>Nombre</span><input id="routine-name" class="input" value=${r.name} placeholder="Ej. Empuje, Pierna, Torso A…" onInput=${(e) => setR({ ...r, name: e.target.value })} /></label>
     <p class="eyebrow">Ejercicios</p>
+    <p class="muted small">El peso es el de partida: se pone solo la primera vez. Después, cada serie viene con el peso de tu último entreno.</p>
     <ul class="edit-list">
       ${r.items.map((it, i) => html`<li class="edit-item">
         <div class="edit-top">
@@ -409,6 +410,7 @@ function RoutineEditor({ routine, exercises, exById, onSave, onDelete, onClose, 
         <div class="edit-controls">
           <label><span>Series</span><${Stepper} label="series" value=${it.sets} onChange=${(v) => setItem(i, { sets: v })} /></label>
           <label><span>Reps</span><${Stepper} label="repeticiones" value=${it.reps} max=${100} onChange=${(v) => setItem(i, { reps: v })} /></label>
+          <label><span>Peso (kg)</span><input class="input kg-input" inputmode="decimal" placeholder="—" aria-label="Peso inicial en kg" value=${it.kg == null ? "" : String(it.kg).replace(".", ",")} onFocus=${(e) => e.target.select()} onInput=${(e) => setItem(i, { kg: num(e.target.value) })} /></label>
           <label><span>Descanso</span><select class="input" value=${it.rest} onChange=${(e) => setItem(i, { rest: Number(e.target.value) })}>${REST_OPTIONS.map((x) => html`<option value=${x}>${mmss(x)}</option>`)}</select></label>
         </div>
       </li>`)}
@@ -600,7 +602,7 @@ function App() {
       const prev = lastSetsFor(it.exId);
       const sets = Array.from({ length: it.sets }, (_, k) => {
         const p = prev[k] || prev.at(-1);
-        return { kg: p?.kg ?? null, reps: p?.reps ?? it.reps, done: false };
+        return { kg: p?.kg ?? it.kg ?? null, reps: p?.reps ?? it.reps, done: false };
       });
       return { exId: it.exId, rest: it.rest || DEFAULT_REST, sets };
     }) : [];
