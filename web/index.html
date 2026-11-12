@@ -387,6 +387,24 @@ button.cal-day.done:hover { background: rgba(245, 165, 36, .22); }
 .day-set small { font: 500 11px var(--font-body); color: var(--muted); }
 .cal-dn { position: absolute; top: 1px; left: 4px; font-size: 9px; font-weight: 700; color: var(--accent); opacity: .8; }
 
+/* Clasificación semanal */
+.ranking { gap: 10px; }
+.rank-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rank-head small { font-size: 12px; }
+.seg.mini { padding: 3px; }
+.seg.mini button { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rank-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); }
+.rank-row.me { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.rank-pos { width: 28px; text-align: center; font: 700 20px var(--font-display); color: var(--muted); }
+.rank-row.top1 .rank-pos { font-size: 20px; }
+.rank-row.top2 .rank-pos { color: #c9ced6; }
+.rank-row.top3 .rank-pos { color: #d29a6a; }
+.rank-row .avatar { width: 34px; height: 34px; flex-shrink: 0; }
+.rank-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rank-val { font: 700 20px var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rank-row.top1 .rank-val { color: var(--accent); }
+
 /* Amigos */
 .warn { background: rgba(240, 96, 93, .12); border: 1px solid rgba(240, 96, 93, .4); color: #ffb3b1; border-radius: 14px; padding: 12px 14px; font-size: 14px; }
 .code-card { gap: 12px; }

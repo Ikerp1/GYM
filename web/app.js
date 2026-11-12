@@ -1024,7 +1024,9 @@ function buildSummary(finished, exById, user) {
     }
   }
   for (const e of Object.values(exercises)) e.series = e.series.slice(-40);
-  return { name: user.displayName || "Sin nombre", photo: user.photoURL || null, dates: finished.slice(0, 150).map((w) => w.finishedAt), exercises };
+  // log: fecha y kilos (peso × reps) de cada entreno reciente, para la clasificación semanal.
+  const log = finished.slice(0, 60).map((w) => ({ t: w.finishedAt, kg: Math.round(w.items.reduce((n, it) => n + doneSets(it).reduce((s, x) => s + (x.kg || 0) * (x.reps || 0), 0), 0)) }));
+  return { name: user.displayName || "Sin nombre", photo: user.photoURL || null, dates: finished.slice(0, 150).map((w) => w.finishedAt), log, exercises };
 }
 const countSince = (dates = [], from) => dates.filter((t) => t >= from).length;
 const weekStartMs = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
@@ -1098,6 +1100,47 @@ function CompareView({ me, them, onBack, onRemove }) {
   </section>`;
 }
 
+// Clasificación de la semana (lunes a domingo) entre tú y tus amigos.
+const daysSince = (dates = [], from) => new Set(dates.filter((t) => t >= from).map((t) => new Date(t).toDateString())).size;
+function WeeklyRanking({ me, friends }) {
+  const [mode, setMode] = useState(() => { try { return localStorage.getItem("gym-rank") || "days"; } catch { return "days"; } });
+  const pick = (m) => { setMode(m); try { localStorage.setItem("gym-rank", m); } catch {} };
+  const from = weekStartMs();
+  const people = [{ ...me, isMe: true }, ...friends].map((p) => ({
+    ...p,
+    days: daysSince(p.dates, from),
+    kg: p.log ? p.log.filter((x) => x.t >= from).reduce((n, x) => n + x.kg, 0) : null, // null = su app aún no envía los kilos
+  }));
+  const val = (p) => (mode === "days" ? p.days : p.kg ?? -1);
+  people.sort((a, b) => val(b) - val(a) || (a.isMe ? -1 : 1));
+  // Puestos con empates: misma cifra = mismo puesto.
+  let rank = 0, prev = null;
+  people.forEach((p, i) => { if (val(p) !== prev) { rank = i + 1; prev = val(p); } p.rank = rank; });
+  const end = new Date(from + 7 * 86400000);
+  const daysLeft = Math.ceil((end - Date.now()) / 86400000);
+  const fmtVal = (p) => mode === "days" ? `${p.days} ${p.days === 1 ? "día" : "días"}` : p.kg == null ? "—" : `${p.kg.toLocaleString("es-ES")} kg`;
+  const leader = people[0];
+  return html`<section class="card ranking">
+    <header class="rank-head">
+      <div><p class="eyebrow">Clasificación de la semana</p><small class="muted">${daysLeft <= 1 ? "Termina hoy" : `Quedan ${daysLeft} días`} · se reinicia el lunes</small></div>
+      <div class="seg mini" role="tablist">
+        <button role="tab" aria-selected=${mode === "days"} class=${mode === "days" ? "on" : ""} onClick=${() => pick("days")}>Días</button>
+        <button role="tab" aria-selected=${mode === "kg"} class=${mode === "kg" ? "on" : ""} onClick=${() => pick("kg")}>Kilos</button>
+      </div>
+    </header>
+    <ol class="rank-list">
+      ${people.map((p) => html`<li class=${"rank-row" + (p.isMe ? " me" : "") + (p.rank <= 3 && val(p) > 0 ? " top" + p.rank : "")}>
+        <span class="rank-pos">${p.rank === 1 && val(p) > 0 ? "👑" : p.rank}</span>
+        <${Avatar} name=${p.name} photo=${p.photo} />
+        <span class="rank-name">${p.isMe ? "Tú" : p.name.split(" ")[0]}</span>
+        <b class="rank-val">${fmtVal(p)}</b>
+      </li>`)}
+    </ol>
+    ${val(leader) <= 0 ? html`<p class="muted small center">Nadie ha entrenado todavía esta semana. ¡El primero se pone en cabeza!</p>`
+      : mode === "kg" && people.some((p) => p.kg == null) ? html`<p class="muted small">"—": su app todavía no comparte los kilos. Aparecerán cuando abra la versión nueva.</p>` : ""}
+  </section>`;
+}
+
 function FriendsView({ uid, mySummary, toast }) {
   const [profile, setProfile] = useState(undefined);
   const [shared, setShared] = useState(undefined);
@@ -1167,6 +1210,10 @@ function FriendsView({ uid, mySummary, toast }) {
   return html`<section class="view">
     <header class="view-head"><p class="eyebrow">Compárate con tus amigos</p><h1>Amigos</h1></header>
     ${rulesError && html`<div class="warn">Falta actualizar las reglas de seguridad de Firebase para usar Amigos. Pídele a Claude el texto de las reglas.</div>`}
+    ${(() => {
+      const accepted = friends.map((f) => friendsData[f]).filter((d) => d && d !== "pending");
+      return accepted.length > 0 && mySummary ? html`<${WeeklyRanking} me=${mySummary} friends=${accepted} />` : "";
+    })()}
     <section class="card code-card">
       <p class="eyebrow">Tu código de amigo</p>
       <div class="code-row">
