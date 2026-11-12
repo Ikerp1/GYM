@@ -387,6 +387,30 @@ button.cal-day.done:hover { background: rgba(245, 165, 36, .22); }
 .day-set small { font: 500 11px var(--font-body); color: var(--muted); }
 .cal-dn { position: absolute; top: 1px; left: 4px; font-size: 9px; font-weight: 700; color: var(--accent); opacity: .8; }
 
+/* Rangos por grupo muscular */
+.ranks { display: grid; gap: 12px; }
+.rank-badge { stroke: none; flex-shrink: 0; display: block; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .4)); }
+.rank-badge text { font-family: var(--font-body); stroke: none; }
+.rank-hero { display: flex; align-items: center; gap: 14px; background: var(--surface-2); border-radius: 16px; padding: 14px; }
+.rank-hero h3 { font-size: 34px; text-transform: uppercase; }
+.rank-hero small { font-size: 12px; }
+.rank-scale { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.rank-scale span { height: 6px; border-radius: 3px; }
+.group-ranks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.group-rank { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border-radius: 12px; padding: 8px 10px; }
+.group-rank.no-data { opacity: .55; }
+.gr-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.gr-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.gr-top b { font: 700 18px var(--font-display); text-transform: uppercase; }
+.gr-top span { font: 700 16px var(--font-display); text-transform: uppercase; letter-spacing: .04em; }
+.gr-bar { height: 6px; border-radius: 3px; background: var(--surface); overflow: hidden; }
+.gr-bar i { display: block; height: 100%; border-radius: 3px; }
+.gr-text small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.rank-up { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border: 1px solid var(--rc); border-radius: 14px; padding: 10px 12px; animation: up .4s ease; }
+.rank-up small { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--rc); }
+.rank-up b { font: 700 22px var(--font-display); text-transform: uppercase; }
+.rank-up b span { color: var(--rc); }
+
 /* Clasificación semanal */
 .ranking { gap: 10px; }
 .rank-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }

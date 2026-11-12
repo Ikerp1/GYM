@@ -524,7 +524,7 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, lastNoteFor, onS
 }
 
 // ---------- Resumen al terminar ----------
-function Summary({ workout, records, exById, onClose }) {
+function Summary({ workout, records, rankUps = [], exById, onClose }) {
   const sets = workout.items.reduce((n, it) => n + it.sets.length, 0);
   const volume = workout.items.reduce((n, it) => n + it.sets.reduce((m, s) => m + (s.kg || 0) * (s.reps || 0), 0), 0);
   return html`<${Sheet} title="¡Entreno guardado!" onClose=${onClose} footer=${html`<button class="btn primary block" onClick=${onClose}>Hecho</button>`}>
@@ -533,6 +533,10 @@ function Summary({ workout, records, exById, onClose }) {
       <div><b>${sets}</b><span>series</span></div>
       <div><b>${Math.round(volume).toLocaleString("es-ES")}</b><span>kg totales</span></div>
     </div>
+    ${rankUps.map((u) => html`<div class="rank-up" style=${`--rc:${RANKS[u.to].color}`}>
+      <${RankBadge} idx=${u.to} size=${48} />
+      <div><small>${u.isNew ? "Nuevo rango" : "¡Subes de rango!"}</small><b>${u.group}: <span>${RANKS[u.to].name}</span></b></div>
+    </div>`)}
     ${records.length ? html`
       <h3 class="pr-title">${I.trophy} ${records.length === 1 ? "Nuevo récord" : `${records.length} récords nuevos`}</h3>
       <ul class="pr-list">${records.map((r) => html`<li><span>${exById[r.exId]?.name}</span><b>${fmtKg(r.kg)} kg × ${r.reps}</b></li>`)}</ul>`
@@ -824,6 +828,124 @@ function ExerciseStats({ exId, ex, sessions, onBack }) {
   </div>`;
 }
 
+// ---------- Rangos por grupo muscular ----------
+// Puntuación = (1RM estimado de tu mejor serie / tu peso corporal) / referencia del ejercicio.
+// "ref" es aproximadamente el nivel de un levantador muy avanzado (1RM ÷ peso corporal); las cifras de
+// mancuernas son por mancuerna. "bw" = ejercicio con tu propio peso: la carga es esa fracción de tu peso + el lastre.
+// Son referencias orientativas basadas en tablas de fuerza habituales.
+const RANKS = [
+  { name: "Hierro", min: 0, color: "#8b9099" },
+  { name: "Bronce", min: 0.2, color: "#c98b5a" },
+  { name: "Plata", min: 0.35, color: "#c4cad3" },
+  { name: "Oro", min: 0.5, color: "#f2c94c" },
+  { name: "Platino", min: 0.65, color: "#5fd4c4" },
+  { name: "Diamante", min: 0.8, color: "#7aa8ff" },
+  { name: "Élite", min: 0.95, color: "#ff6f91" },
+];
+const STRENGTH = {
+  "press-banca": { ref: 2.0 }, "press-inclinado-barra": { ref: 1.7 }, "press-banca-mancuernas": { ref: 0.8 },
+  "press-inclinado-mancuernas": { ref: 0.7 }, "press-pecho-maquina": { ref: 2.0 }, "aperturas-mancuernas": { ref: 0.45 },
+  "cruce-poleas": { ref: 0.6 }, "contractora": { ref: 1.4 }, "fondos": { ref: 2.2, bw: 1 }, "flexiones": { ref: 1.9, bw: 0.65 },
+  "dominadas": { ref: 2.0, bw: 1 }, "jalon-pecho": { ref: 1.5 }, "remo-barra": { ref: 1.6 }, "remo-mancuerna": { ref: 0.9 },
+  "remo-polea-baja": { ref: 1.6 }, "remo-maquina": { ref: 1.6 }, "remo-t": { ref: 1.6 }, "pullover-polea": { ref: 0.8 }, "peso-muerto": { ref: 3.0 },
+  "press-militar": { ref: 1.3 }, "press-hombro-mancuernas": { ref: 0.55 }, "press-hombro-maquina": { ref: 1.3 },
+  "elevaciones-laterales": { ref: 0.35 }, "elevaciones-laterales-polea": { ref: 0.25 }, "elevaciones-frontales": { ref: 0.35 },
+  "pajaros": { ref: 0.3 }, "face-pull": { ref: 0.8 }, "encogimientos": { ref: 1.2 },
+  "curl-barra": { ref: 1.0 }, "curl-mancuernas": { ref: 0.5 }, "curl-martillo": { ref: 0.55 }, "curl-predicador": { ref: 0.8 }, "curl-polea": { ref: 0.9 },
+  "extension-triceps-polea": { ref: 1.0 }, "press-frances": { ref: 0.9 }, "extension-triceps-cabeza": { ref: 0.5 },
+  "press-banca-cerrado": { ref: 1.7 }, "patada-triceps": { ref: 0.35 },
+  "sentadilla": { ref: 2.6 }, "sentadilla-frontal": { ref: 2.1 }, "sentadilla-hack": { ref: 2.8 }, "prensa": { ref: 5.0 },
+  "extension-cuadriceps": { ref: 1.4 }, "zancadas": { ref: 0.6 }, "sentadilla-bulgara": { ref: 0.6 }, "sentadilla-goblet": { ref: 0.9 },
+  "peso-muerto-rumano": { ref: 2.2 }, "curl-femoral-tumbado": { ref: 1.0 }, "curl-femoral-sentado": { ref: 1.1 },
+  "hip-thrust": { ref: 3.0 }, "abductores": { ref: 1.6 }, "patada-gluteo-polea": { ref: 0.6 },
+  "gemelo-pie": { ref: 2.5 }, "gemelo-sentado": { ref: 2.0 },
+  "crunch-polea": { ref: 1.2 }, "elevacion-piernas": { ref: 0.65, bw: 0.35 }, "rueda-abdominal": { ref: 0.9, bw: 0.5 },
+};
+const GROUP_OF = Object.fromEntries(BUILTIN_EXERCISES.map((e) => [e.id, e.group]));
+const rankIndex = (score) => { let i = 0; RANKS.forEach((r, k) => { if (score >= r.min) i = k; }); return i; };
+
+/** Rango de cada grupo muscular: { grupo: { score, exId, kg, reps, e1 } }. null si no hay peso corporal. */
+function computeRanks(finished, bw) {
+  if (!bw) return null;
+  const best = {};
+  for (const w of finished) for (const it of w.items) {
+    const s = STRENGTH[it.exId];
+    if (!s) continue;
+    for (const x of doneSets(it)) {
+      if (!x.reps) continue;
+      const load = s.bw ? bw * s.bw + (x.kg || 0) : x.kg || 0;
+      if (!load) continue;
+      const e = load * (1 + Math.min(x.reps, 30) / 30);
+      if (!best[it.exId] || e > best[it.exId].e1) best[it.exId] = { e1: e, kg: x.kg || 0, reps: x.reps };
+    }
+  }
+  const groups = {};
+  for (const [id, b] of Object.entries(best)) {
+    const g = GROUP_OF[id], score = b.e1 / bw / STRENGTH[id].ref;
+    if (!groups[g] || score > groups[g].score) groups[g] = { score, exId: id, ...b };
+  }
+  return groups;
+}
+
+// Escudo con el color del rango (y su inicial).
+function RankBadge({ idx, size = 40, empty }) {
+  const r = RANKS[idx] || RANKS[0];
+  const color = empty ? "#3a3f46" : r.color;
+  return html`<svg class="rank-badge" style=${`width:${size}px;height:${size}px`} viewBox="0 0 40 40" aria-hidden="true">
+    <path d="M20 3l14 5v10c0 9-6 16-14 19C12 34 6 27 6 18V8z" fill=${color} />
+    <path d="M20 7l10 3.6V18c0 6.8-4.4 12.2-10 14.6C14.4 30.2 10 24.8 10 18v-7.4z" fill="rgba(0,0,0,.18)" />
+    ${!empty && Array.from({ length: Math.min(idx, 6) }, (_, k) => html`<circle cx=${20 + (k - (Math.min(idx, 6) - 1) / 2) * 4.2} cy="29" r="1.3" fill="rgba(0,0,0,.45)" />`)}
+    <text x="20" y="22.5" text-anchor="middle" font-size="12" font-weight="800" fill="rgba(0,0,0,.6)">${empty ? "?" : r.name[0]}</text>
+  </svg>`;
+}
+
+function RanksView({ finished, bodyW, exById }) {
+  if (!bodyW) return html`<div class="empty">Para calcular tus rangos necesito tu peso corporal. Ve a <b>Body</b> (aquí en Progress) y añade una medición con tu peso.</div>`;
+  const ranks = computeRanks(finished, bodyW);
+  const withData = GROUPS.filter((g) => ranks[g]);
+  const overallScore = withData.length ? withData.reduce((n, g) => n + ranks[g].score, 0) / withData.length : 0;
+  const overall = rankIndex(overallScore);
+  return html`<div class="ranks">
+    <section class="rank-hero">
+      <${RankBadge} idx=${overall} size=${76} empty=${!withData.length} />
+      <div>
+        <p class="eyebrow">Rango general</p>
+        <h3 style=${`color:${withData.length ? RANKS[overall].color : "var(--muted)"}`}>${withData.length ? RANKS[overall].name : "Sin rango"}</h3>
+        <small class="muted">${withData.length ? `Media de ${withData.length} ${withData.length === 1 ? "grupo muscular" : "grupos musculares"} · peso corporal ${fmtKg(bodyW)} kg` : "Termina un entreno para empezar"}</small>
+      </div>
+    </section>
+    <div class="rank-scale">${RANKS.map((r, i) => html`<span title=${r.name} style=${`background:${r.color}; opacity:${i <= overall && withData.length ? 1 : 0.25}`}></span>`)}</div>
+    <ul class="group-ranks">
+      ${GROUPS.map((g) => {
+        const d = ranks[g];
+        if (!d) return html`<li class="group-rank no-data"><${RankBadge} idx=${0} size=${38} empty=${true} /><div class="gr-text"><b>${g}</b><small>Sin datos: haz un ejercicio de ${g.toLowerCase()} con peso</small></div></li>`;
+        const i = rankIndex(d.score), r = RANKS[i], next = RANKS[i + 1];
+        const pct = next ? Math.max(4, Math.min(100, ((d.score - r.min) / (next.min - r.min)) * 100)) : 100;
+        let hint = "Rango máximo. ¡Leyenda!";
+        if (next) {
+          const s = STRENGTH[d.exId];
+          const needE1 = next.min * s.ref * bodyW;
+          const needLoad = needE1 / (1 + Math.min(d.reps, 30) / 30);
+          const needKg = s.bw ? needLoad - bodyW * s.bw : needLoad;
+          const step = 2.5, kgR = Math.ceil(needKg / step) * step;
+          hint = s.bw && kgR <= 0
+            ? `Para ${next.name}: más repeticiones en ${exById[d.exId]?.name}`
+            : `Para ${next.name}: ${fmtKg(kgR)} kg${s.bw ? " de lastre" : ""} × ${d.reps} en ${exById[d.exId]?.name}`;
+        }
+        return html`<li class="group-rank">
+          <${RankBadge} idx=${i} size=${38} />
+          <div class="gr-text">
+            <div class="gr-top"><b>${g}</b><span style=${`color:${r.color}`}>${r.name}</span></div>
+            <div class="gr-bar"><i style=${`width:${pct}%; background:${r.color}`}></i></div>
+            <small>${exById[d.exId]?.name}: ${d.kg > 0 ? `${fmtKg(d.kg)} kg × ${d.reps}` : `${d.reps} reps`} · ${hint}</small>
+          </div>
+        </li>`;
+      })}
+    </ul>
+    <p class="muted small">Cada grupo usa tu mejor serie (como 1RM estimado) en el mejor de sus ejercicios, comparada con tu peso corporal. Son referencias orientativas: sirven para ver tu progreso, no para compararte con nadie en concreto.</p>
+  </div>`;
+}
+
 // ---------- Body: peso y medidas corporales ----------
 // Mediciones en users/{uid}/body/{id} = { t, weight, fat, waist, chest, arm, thigh }.
 // Altura y peso objetivo en users/{uid}/meta/body = { height, goal }.
@@ -928,7 +1050,7 @@ function BodyView({ uid, toast }) {
   </div>`;
 }
 
-function ProgressView({ finished, exById, onDelete, uid, toast }) {
+function ProgressView({ finished, exById, onDelete, uid, toast, bodyW }) {
   const [sheet, setSheet] = useState(null); // "ex" = progreso por ejercicio, "hist" = historial
   const [open, setOpen] = useState(null);
   const [ask, setAsk] = useState(null);
@@ -963,6 +1085,7 @@ function ProgressView({ finished, exById, onDelete, uid, toast }) {
     <div class="nav-list">
       <button class="nav-btn" aria-label="Progreso por ejercicio: gráfica y récords" onClick=${() => setSheet("ex")}>${I.chart}<span>Por ejercicio</span></button>
       <button class="nav-btn" aria-label="Historial de entrenos" onClick=${() => setSheet("hist")}>${I.list}<span>Historial</span></button>
+      <button class="nav-btn" aria-label="Rangos por grupo muscular" onClick=${() => setSheet("ranks")}>${I.trophy}<span>Rangos</span></button>
       <button class="nav-btn" aria-label="Body: peso y medidas" onClick=${() => setSheet("body")}>${I.body}<span>Body</span></button>
     </div>
 
@@ -999,6 +1122,7 @@ function ProgressView({ finished, exById, onDelete, uid, toast }) {
       </ul>` : html`<div class="empty">Todavía no hay entrenos guardados.</div>`}
     </${Sheet}>`}
     ${sheet === "body" && html`<${Sheet} title="Body" onClose=${() => setSheet(null)}><${BodyView} uid=${uid} toast=${toast} /></${Sheet}>`}
+    ${sheet === "ranks" && html`<${Sheet} title="Rangos" onClose=${() => setSheet(null)}><${RanksView} finished=${finished} bodyW=${bodyW} exById=${exById} /></${Sheet}>`}
     ${ask && html`<${Confirm} ...${ask} onClose=${() => setAsk(null)} />`}
   </section>`;
 }
@@ -1318,6 +1442,7 @@ function App() {
   const [routines, setRoutines] = useState([]);
   const [customEx, setCustomEx] = useState([]);
   const [workouts, setWorkouts] = useState([]);
+  const [bodyW, setBodyW] = useState(null); // último peso corporal (de Body), para los rangos
   const [loaded, setLoaded] = useState(false);
   const [rest, setRestState] = useState(() => { try { const r = JSON.parse(localStorage.getItem("gym-rest")); return r && r.endsAt > Date.now() ? r : null; } catch { return null; } });
   const [editing, setEditing] = useState(null);
@@ -1338,7 +1463,8 @@ function App() {
     const u1 = watchCollection(user.uid, "routines", once((list) => setRoutines(list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)))), onErr);
     const u2 = watchCollection(user.uid, "exercises", once((list) => setCustomEx(list.map((e) => ({ ...e, custom: true })))), onErr);
     const u3 = watchCollection(user.uid, "workouts", once((list) => setWorkouts(list.sort((a, b) => b.startedAt - a.startedAt))), onErr);
-    return () => { u1(); u2(); u3(); };
+    const u4 = watchCollection(user.uid, "body", (list) => { const w = list.filter((e) => e.weight).sort((a, b) => b.t - a.t)[0]; setBodyW(w ? w.weight : null); });
+    return () => { u1(); u2(); u3(); u4(); };
   }, [user?.uid]);
 
   const setRest = (r) => { setRestState(r); try { r ? localStorage.setItem("gym-rest", JSON.stringify(r)) : localStorage.removeItem("gym-rest"); } catch {} };
@@ -1421,10 +1547,15 @@ function App() {
       const hadBefore = finished.some((f) => f.items.some((x) => x.exId === it.exId));
       if (top && hadBefore && top.kg > prevMax) records.push({ exId: it.exId, kg: top.kg, reps: top.reps });
     }
+    // Subidas de rango: compara los rangos de antes y de después de este entreno.
+    const before = computeRanks(finished, bodyW), after = computeRanks([done, ...finished], bodyW);
+    const rankUps = after ? Object.entries(after)
+      .filter(([g, d]) => !before?.[g] || rankIndex(d.score) > rankIndex(before[g].score))
+      .map(([g, d]) => ({ group: g, to: rankIndex(d.score), isNew: !before?.[g] })) : [];
     setWorkouts((l) => l.map((x) => (x.id === w.id ? done : x)));
     saveDoc(uid, "workouts", w.id, done);
     setRest(null);
-    setSummary({ workout: done, records });
+    setSummary({ workout: done, records, rankUps });
   };
   const discardWorkout = (w) => { setWorkouts((l) => l.filter((x) => x.id !== w.id)); removeDoc(uid, "workouts", w.id); setRest(null); setToast("Entreno descartado"); };
   const deleteWorkout = (w) => { setWorkouts((l) => l.filter((x) => x.id !== w.id)); removeDoc(uid, "workouts", w.id); setToast("Entreno borrado"); };
@@ -1459,7 +1590,7 @@ function App() {
           : html`<${TodayView} routines=${routines} finished=${finished} exById=${exById} lastSetsFor=${lastSetsFor} onStart=${startWorkout} goRoutines=${() => { setTab("rutinas"); setEditing({ id: newId(), name: "", items: [], isNew: true }); }} />`)
         : tab === "rutinas" ? html`<${RoutinesView} routines=${routines} exById=${exById} nextId=${nextId} onEdit=${(r) => setEditing(r)} onNew=${() => setEditing({ id: newId(), name: "", items: [], isNew: true })} onReorder=${reorder} />`
         : tab === "amigos" ? html`<${FriendsView} uid=${uid} mySummary=${mySummary} toast=${setToast} />`
-        : html`<${ProgressView} finished=${finished} exById=${exById} onDelete=${deleteWorkout} uid=${uid} toast=${setToast} />`}
+        : html`<${ProgressView} finished=${finished} exById=${exById} onDelete=${deleteWorkout} uid=${uid} toast=${setToast} bodyW=${bodyW} />`}
     </main>
     ${rest && html`<${RestBar} key=${rest.endsAt} rest=${rest} onChange=${setRest} />`}
     <${TabBar} tabs=${tabs} tab=${tab} onTab=${setTab} live=${!!active} />
