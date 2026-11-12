@@ -332,6 +332,74 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
   </section>`;
 }
 
+// ---------- Arrastrar para reordenar (entreno y editor de rutinas) ----------
+// Al pulsar el asa, el elemento sigue al dedo, los demás se apartan para hacerle hueco y al soltar
+// se llama a onMove(desde, hasta). scroller: elemento que se desplaza (null = la página entera).
+function useDragReorder(onMove, scrollerOf = () => null) {
+  const [drag, setDrag] = useState(null); // { from, over, dy, shift }
+  const st = useRef(null);
+  const els = useRef([]);
+  const getY = (sc) => (sc ? sc.scrollTop : window.scrollY);
+  const scrollBy = (sc, d) => (sc ? (sc.scrollTop += d) : window.scrollBy(0, d));
+  const move = (clientY) => {
+    const d = st.current;
+    if (!d) return;
+    d.last = clientY;
+    const dy = clientY + getY(d.sc) - d.startY;
+    const center = d.mids[d.from] + dy;
+    let over = 0;
+    d.mids.forEach((m, j) => { if (j !== d.from && m < center) over++; });
+    d.over = over;
+    setDrag((s) => (s && (s.dy !== dy || s.over !== over) ? { ...s, dy, over } : s));
+  };
+  const start = (e, i) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const sc = scrollerOf(e.currentTarget);
+    const rects = els.current.map((el) => el?.getBoundingClientRect());
+    const y0 = getY(sc);
+    const mids = rects.map((r) => (r ? r.top + y0 + r.height / 2 : 0));
+    const next = rects[i + 1], prev = rects[i - 1];
+    const gap = next ? next.top - rects[i].bottom : prev ? rects[i].top - prev.bottom : 10;
+    const box = sc ? sc.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    st.current = { from: i, over: i, startY: e.clientY + y0, last: e.clientY, mids, shift: rects[i].height + gap, sc, box };
+    try { navigator.vibrate?.(15); } catch {}
+    setDrag({ from: i, over: i, dy: 0, shift: st.current.shift });
+    const tick = () => {
+      const d = st.current;
+      if (!d) return;
+      // Desplazamiento automático cerca de los bordes.
+      if (d.last < d.box.top + 70) scrollBy(d.sc, -10);
+      else if (d.last > d.box.bottom - (d.sc ? 70 : 150)) scrollBy(d.sc, 10);
+      move(d.last);
+      d.raf = requestAnimationFrame(tick);
+    };
+    st.current.raf = requestAnimationFrame(tick);
+  };
+  const end = () => {
+    const d = st.current;
+    if (!d) return;
+    cancelAnimationFrame(d.raf);
+    st.current = null;
+    setDrag(null);
+    if (d.from !== d.over) onMove(d.from, d.over);
+  };
+  return {
+    drag,
+    ref: (i) => (el) => { els.current[i] = el; },
+    cls: (i) => (drag ? " drag-active" : "") + (drag?.from === i ? " dragging" : ""),
+    style: (j) => {
+      if (!drag) return "";
+      if (j === drag.from) return `transform: translateY(${drag.dy}px) scale(1.02); z-index: 5; position: relative;`;
+      const { from, over, shift } = drag;
+      if (from < over && j > from && j <= over) return `transform: translateY(${-shift}px);`;
+      if (from > over && j >= over && j < from) return `transform: translateY(${shift}px);`;
+      return "";
+    },
+    handle: (i) => ({ onPointerDown: (e) => start(e, i), onPointerMove: (e) => move(e.clientY), onPointerUp: end, onPointerCancel: end }),
+  };
+}
+
 // ---------- Pantalla: Entreno en curso ----------
 function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish, onDiscard, onRest, onCreateExercise }) {
   const [w, setW] = useState(workout);
@@ -374,59 +442,8 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
     commit({ ...latest.current, items }, true);
   };
 
-  // ---- Arrastrar ejercicios con el asa (⋮⋮) ----
-  // Al pulsar el asa, la tarjeta sigue al dedo; las demás se apartan; al soltar se reordena.
-  const [drag, setDrag] = useState(null); // { from, over, dy, shift }
-  const dragRef = useRef(null);
-  const cardEls = useRef([]);
-  const startDrag = (e, i) => {
-    e.preventDefault();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    const rects = cardEls.current.map((el) => el?.getBoundingClientRect());
-    const mids = rects.map((r) => (r ? r.top + window.scrollY + r.height / 2 : 0));
-    const shift = rects[i].height + 14; // alto de la tarjeta + separación
-    dragRef.current = { from: i, startY: e.clientY + window.scrollY, lastClientY: e.clientY, mids, shift, over: i };
-    try { navigator.vibrate?.(15); } catch {}
-    setDrag({ from: i, over: i, dy: 0, shift });
-    const tick = () => {
-      const d = dragRef.current;
-      if (!d) return;
-      // Desplazamiento automático cerca de los bordes de la pantalla.
-      const edge = 90, bottomEdge = window.innerHeight - 150;
-      if (d.lastClientY < edge) window.scrollBy(0, -10);
-      else if (d.lastClientY > bottomEdge) window.scrollBy(0, 10);
-      update(d.lastClientY);
-      d.raf = requestAnimationFrame(tick);
-    };
-    dragRef.current.raf = requestAnimationFrame(tick);
-  };
-  const update = (clientY) => {
-    const d = dragRef.current;
-    if (!d) return;
-    d.lastClientY = clientY;
-    const dy = clientY + window.scrollY - d.startY;
-    const center = d.mids[d.from] + dy;
-    let over = 0;
-    d.mids.forEach((m, j) => { if (j !== d.from && m < center) over++; });
-    d.over = over;
-    setDrag((s) => (s && (s.dy !== dy || s.over !== over) ? { ...s, dy, over } : s));
-  };
-  const endDrag = () => {
-    const d = dragRef.current;
-    if (!d) return;
-    cancelAnimationFrame(d.raf);
-    dragRef.current = null;
-    setDrag(null);
-    moveTo(d.from, d.over);
-  };
-  const dragStyle = (j) => {
-    if (!drag) return "";
-    if (j === drag.from) return `transform: translateY(${drag.dy}px) scale(1.02); z-index: 5; position: relative;`;
-    const { from, over, shift } = drag;
-    if (from < over && j > from && j <= over) return `transform: translateY(${-shift}px);`;
-    if (from > over && j >= over && j < from) return `transform: translateY(${shift}px);`;
-    return "";
-  };
+  // Arrastrar ejercicios con el asa (⋮⋮): la página es la que se desplaza.
+  const dr = useDragReorder(moveTo);
   const addExercise = (ex) => {
     const prev = lastSetsFor(ex.id);
     const sets = (prev.length ? prev : [{}, {}, {}]).map((s) => ({ kg: null, reps: null, done: false, hint: { kg: s.kg ?? null, reps: s.reps ?? null } }));
@@ -448,10 +465,10 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
     ${w.items.map((it, i) => {
       const ex = exById[it.exId];
       const prev = lastSetsFor(it.exId, w.id);
-      return html`<article class=${"card ex-card" + (drag?.from === i ? " dragging" : "") + (drag ? " drag-active" : "")} ref=${(el) => (cardEls.current[i] = el)} style=${dragStyle(i)}>
+      return html`<article class=${"card ex-card" + dr.cls(i)} ref=${dr.ref(i)} style=${dr.style(i)}>
         <header class="ex-head">
           ${w.items.length > 1 && html`<button class="drag-handle" aria-label=${`Mover ${ex?.name || "ejercicio"}: mantén pulsado y arrastra`} title="Mantén pulsado y arrastra"
-            onPointerDown=${(e) => startDrag(e, i)} onPointerMove=${(e) => update(e.clientY)} onPointerUp=${endDrag} onPointerCancel=${endDrag}>${I.grip}</button>`}
+            ...${dr.handle(i)}>${I.grip}</button>`}
           <button class="thumb-btn" aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}><${ExerciseFigure} exId=${it.exId} /></button>
           <div class="ex-title">
             <h3>${ex?.name || "Ejercicio"}</h3>
@@ -516,7 +533,11 @@ function RoutineEditor({ routine, exercises, exById, onSave, onDelete, onClose, 
   const [picker, setPicker] = useState(false);
   const [ask, setAsk] = useState(null);
   const setItem = (i, patch) => setR({ ...r, items: r.items.map((it, j) => (j === i ? { ...it, ...patch } : it)) });
-  const move = (i, d) => { const items = [...r.items]; [items[i], items[i + d]] = [items[i + d], items[i]]; setR({ ...r, items }); };
+  // Arrastrar ejercicios con el asa (⋮⋮): aquí lo que se desplaza es el interior de la ventana.
+  const dr = useDragReorder(
+    (from, to) => setR((cur) => { const items = [...cur.items]; const [it] = items.splice(from, 1); items.splice(to, 0, it); return { ...cur, items }; }),
+    (el) => el.closest(".sheet-body"),
+  );
   return html`<${Sheet} title=${routine.isNew ? "Nueva rutina" : "Editar rutina"} onClose=${onClose} footer=${html`
       ${!routine.isNew && html`<button class="btn ghost danger-text" onClick=${() => setAsk({ title: "Borrar rutina", text: `¿Borrar «${r.name}»? Tus entrenos ya hechos no se borran.`, yes: "Borrar", danger: true, onYes: () => onDelete(r) })}>Borrar</button>`}
       <button class="btn primary" disabled=${!r.name.trim() || !r.items.length} onClick=${() => onSave(r)}>Guardar</button>`}>
@@ -524,13 +545,12 @@ function RoutineEditor({ routine, exercises, exById, onSave, onDelete, onClose, 
     <p class="eyebrow">Ejercicios</p>
     <p class="muted small">El peso es el de partida: se pone solo la primera vez. Después, cada serie viene con el peso de tu último entreno.</p>
     <ul class="edit-list">
-      ${r.items.map((it, i) => html`<li class="edit-item">
+      ${r.items.map((it, i) => html`<li class=${"edit-item" + dr.cls(i)} ref=${dr.ref(i)} style=${dr.style(i)}>
         <div class="edit-top">
+          ${r.items.length > 1 && html`<button class="drag-handle" aria-label=${`Mover ${exById[it.exId]?.name || "ejercicio"}: mantén pulsado y arrastra`} title="Mantén pulsado y arrastra" ...${dr.handle(i)}>${I.grip}</button>`}
           <${ExerciseFigure} exId=${it.exId} />
           <b>${exById[it.exId]?.name || "Ejercicio"}</b>
           <div class="ex-tools">
-            <button class="icon-btn" aria-label="Subir" disabled=${i === 0} onClick=${() => move(i, -1)}>${I.up}</button>
-            <button class="icon-btn" aria-label="Bajar" disabled=${i === r.items.length - 1} onClick=${() => move(i, 1)}>${I.down}</button>
             <button class="icon-btn" aria-label="Quitar" onClick=${() => setR({ ...r, items: r.items.filter((_, j) => j !== i) })}>${I.trash}</button>
           </div>
         </div>
