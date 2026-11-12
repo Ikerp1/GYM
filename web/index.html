@@ -136,6 +136,13 @@ p { margin: 0; }
 .ex-head { display: flex; gap: 10px; align-items: flex-start; }
 .ex-title { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .thumb-btn { flex-shrink: 0; border-radius: 12px; }
+/* Asa para arrastrar ejercicios durante el entreno */
+.drag-handle { flex-shrink: 0; width: 28px; height: 48px; margin-left: -6px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.drag-handle svg { width: 20px; height: 20px; fill: currentColor; stroke: none; }
+.drag-handle:active { cursor: grabbing; color: var(--accent); background: var(--surface-2); }
+.ex-card.drag-active { transition: transform .18s ease; }
+.ex-card.dragging { transition: none; box-shadow: 0 18px 40px rgba(0, 0, 0, .55); border-color: var(--accent); }
+.ex-card.drag-active:not(.dragging) { opacity: .85; }
 .ex-tools { display: flex; gap: 2px; flex-shrink: 0; }
 .ex-tools.vertical { flex-direction: column; }
 .sets { display: grid; gap: 6px; }

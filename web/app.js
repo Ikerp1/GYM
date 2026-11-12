@@ -61,6 +61,7 @@ const I = {
   search: html`<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>`,
   trophy: html`<svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5a3 3 0 003 4M16 6h3a3 3 0 01-3 4M12 13v4M8.5 20h7"/></svg>`,
   timer: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4"/></svg>`,
+  grip: html`<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>`,
   calendar: html`<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`,
   body: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2.2"/><path d="M5 8.5h14M12 8.5v6M9 21l3-6.5 3 6.5"/></svg>`,
   scale: html`<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9.5a4.5 4.5 0 018 0M12 9.5l1.5-2"/></svg>`,
@@ -365,7 +366,67 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
   // Serie nueva: vacía, con la pista en gris de la serie anterior.
   const addSet = (i) => setItem(i, (it) => { const l = it.sets.at(-1); return { ...it, sets: [...it.sets, { kg: null, reps: null, done: false, hint: { kg: l?.kg ?? l?.hint?.kg ?? null, reps: l?.reps ?? l?.hint?.reps ?? null } }] }; }, true);
   const removeSet = (i, k) => setItem(i, (it) => ({ ...it, sets: it.sets.filter((_, j) => j !== k) }), true);
-  const move = (i, d) => { const items = [...w.items]; [items[i], items[i + d]] = [items[i + d], items[i]]; commit({ ...w, items }, true); };
+  const moveTo = (from, to) => {
+    if (from === to) return;
+    const items = [...latest.current.items];
+    const [it] = items.splice(from, 1);
+    items.splice(to, 0, it);
+    commit({ ...latest.current, items }, true);
+  };
+
+  // ---- Arrastrar ejercicios con el asa (⋮⋮) ----
+  // Al pulsar el asa, la tarjeta sigue al dedo; las demás se apartan; al soltar se reordena.
+  const [drag, setDrag] = useState(null); // { from, over, dy, shift }
+  const dragRef = useRef(null);
+  const cardEls = useRef([]);
+  const startDrag = (e, i) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const rects = cardEls.current.map((el) => el?.getBoundingClientRect());
+    const mids = rects.map((r) => (r ? r.top + window.scrollY + r.height / 2 : 0));
+    const shift = rects[i].height + 14; // alto de la tarjeta + separación
+    dragRef.current = { from: i, startY: e.clientY + window.scrollY, lastClientY: e.clientY, mids, shift, over: i };
+    try { navigator.vibrate?.(15); } catch {}
+    setDrag({ from: i, over: i, dy: 0, shift });
+    const tick = () => {
+      const d = dragRef.current;
+      if (!d) return;
+      // Desplazamiento automático cerca de los bordes de la pantalla.
+      const edge = 90, bottomEdge = window.innerHeight - 150;
+      if (d.lastClientY < edge) window.scrollBy(0, -10);
+      else if (d.lastClientY > bottomEdge) window.scrollBy(0, 10);
+      update(d.lastClientY);
+      d.raf = requestAnimationFrame(tick);
+    };
+    dragRef.current.raf = requestAnimationFrame(tick);
+  };
+  const update = (clientY) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.lastClientY = clientY;
+    const dy = clientY + window.scrollY - d.startY;
+    const center = d.mids[d.from] + dy;
+    let over = 0;
+    d.mids.forEach((m, j) => { if (j !== d.from && m < center) over++; });
+    d.over = over;
+    setDrag((s) => (s && (s.dy !== dy || s.over !== over) ? { ...s, dy, over } : s));
+  };
+  const endDrag = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    cancelAnimationFrame(d.raf);
+    dragRef.current = null;
+    setDrag(null);
+    moveTo(d.from, d.over);
+  };
+  const dragStyle = (j) => {
+    if (!drag) return "";
+    if (j === drag.from) return `transform: translateY(${drag.dy}px) scale(1.02); z-index: 5; position: relative;`;
+    const { from, over, shift } = drag;
+    if (from < over && j > from && j <= over) return `transform: translateY(${-shift}px);`;
+    if (from > over && j >= over && j < from) return `transform: translateY(${shift}px);`;
+    return "";
+  };
   const addExercise = (ex) => {
     const prev = lastSetsFor(ex.id);
     const sets = (prev.length ? prev : [{}, {}, {}]).map((s) => ({ kg: null, reps: null, done: false, hint: { kg: s.kg ?? null, reps: s.reps ?? null } }));
@@ -387,16 +448,16 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
     ${w.items.map((it, i) => {
       const ex = exById[it.exId];
       const prev = lastSetsFor(it.exId, w.id);
-      return html`<article class="card ex-card">
+      return html`<article class=${"card ex-card" + (drag?.from === i ? " dragging" : "") + (drag ? " drag-active" : "")} ref=${(el) => (cardEls.current[i] = el)} style=${dragStyle(i)}>
         <header class="ex-head">
+          ${w.items.length > 1 && html`<button class="drag-handle" aria-label=${`Mover ${ex?.name || "ejercicio"}: mantén pulsado y arrastra`} title="Mantén pulsado y arrastra"
+            onPointerDown=${(e) => startDrag(e, i)} onPointerMove=${(e) => update(e.clientY)} onPointerUp=${endDrag} onPointerCancel=${endDrag}>${I.grip}</button>`}
           <button class="thumb-btn" aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}><${ExerciseFigure} exId=${it.exId} /></button>
           <div class="ex-title">
             <h3>${ex?.name || "Ejercicio"}</h3>
             <p class="muted small">${prev.length ? `Última vez ${relDays(prev.when)}` : "Primera vez con este ejercicio"}</p>
           </div>
           <div class="ex-tools">
-            <button class="icon-btn" aria-label="Subir" disabled=${i === 0} onClick=${() => move(i, -1)}>${I.up}</button>
-            <button class="icon-btn" aria-label="Bajar" disabled=${i === w.items.length - 1} onClick=${() => move(i, 1)}>${I.down}</button>
             <button class="icon-btn" aria-label="Quitar ejercicio" onClick=${() => setAsk({ title: "Quitar ejercicio", text: `¿Quitar ${ex?.name || "este ejercicio"} del entreno de hoy?`, yes: "Quitar", danger: true, onYes: () => commit({ ...w, items: w.items.filter((_, j) => j !== i) }, true) })}>${I.trash}</button>
           </div>
         </header>
