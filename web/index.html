@@ -116,6 +116,16 @@ p { margin: 0; }
 .hero { background: linear-gradient(160deg, #22201a, var(--surface) 60%); border: 1px solid #3a3222; border-radius: 20px; padding: 18px; display: grid; gap: 14px; }
 .hero-top { display: grid; gap: 4px; }
 .hero-title { font-size: 46px; text-transform: uppercase; color: var(--accent); }
+/* Tarjeta compacta de la rutina de hoy */
+.hero.compact { gap: 10px; padding: 16px; }
+.hero.compact .hero-title { font-size: 38px; }
+.mini-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.mini-thumb { flex-shrink: 0; border-radius: 10px; }
+.mini-thumb .thumb { width: 44px; height: 44px; }
+.plan-toggle { justify-self: start; min-height: 32px; padding: 0; font-size: 14px; color: var(--muted); gap: 4px; }
+.plan-toggle .chev { display: grid; transition: transform .2s; }
+.plan-toggle .chev svg { width: 16px; height: 16px; }
+.plan-toggle .chev.up { transform: rotate(180deg); }
 .plan { list-style: none; margin: 0; padding: 0; display: grid; }
 .plan li { border-top: 1px solid var(--line); }
 .plan-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 0; text-align: left; }

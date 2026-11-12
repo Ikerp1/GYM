@@ -277,6 +277,7 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
   const nextIdx = lastRoutineWorkout ? (ordered.findIndex((r) => r.id === lastRoutineWorkout.routineId) + 1) % ordered.length : 0;
   const [pickedId, setPickedId] = useState(null);
   const [info, setInfo] = useState(null);
+  const [showPlan, setShowPlan] = useState(false); // lista de ejercicios desplegada o no
   const routine = ordered.find((r) => r.id === pickedId) || ordered[nextIdx];
   const last = finished[0];
   const lastOfThis = routine && finished.find((w) => w.routineId === routine.id);
@@ -289,12 +290,16 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
     </header>
 
     ${routine ? html`
-      <article class="hero">
+      <article class="hero compact">
         <div class="hero-top">
           <h2 class="hero-title">${routine.name}</h2>
-          <p class="muted">${routine.items.length} ejercicios · ${routine.items.reduce((n, it) => n + it.sets, 0)} series${lastOfThis ? ` · última vez ${relDays(lastOfThis.finishedAt)}` : ""}</p>
+          <p class="muted small">${routine.items.length} ejercicios · ${routine.items.reduce((n, it) => n + it.sets, 0)} series${lastOfThis ? ` · última vez ${relDays(lastOfThis.finishedAt)}` : ""}</p>
         </div>
-        <ul class="plan">
+        ${!showPlan && html`<div class="mini-row" aria-label="Ejercicios de la rutina">
+          ${routine.items.map((it) => { const ex = exById[it.exId]; return html`<button class="mini-thumb" title=${ex?.name || ""} aria-label=${`Ver cómo se hace ${ex?.name || ""}`} onClick=${() => ex && setInfo(ex)}><${ExerciseFigure} exId=${it.exId} /></button>`; })}
+        </div>`}
+        <button class="btn link plan-toggle" aria-expanded=${showPlan} onClick=${() => setShowPlan(!showPlan)}>${showPlan ? "Ocultar ejercicios" : "Ver ejercicios"} <span class=${"chev" + (showPlan ? " up" : "")}>${I.down}</span></button>
+        ${showPlan && html`<ul class="plan">
           ${routine.items.map((it) => {
             const top = Math.max(0, ...lastSetsFor(it.exId).map((s) => s.kg || 0)) || it.kg || 0;
             const ex = exById[it.exId];
@@ -304,7 +309,7 @@ function TodayView({ routines, finished, exById, lastSetsFor, onStart, goRoutine
               <span class="plan-meta">${it.sets}×${it.reps}${top > 0 ? html` · <b>${fmtKg(top)} kg</b>` : ""}</span>
             </button></li>`;
           })}
-        </ul>
+        </ul>`}
         <button class="btn primary big block" onClick=${() => { unlockAudio(); onStart(routine); }}>Empezar ${routine.name}</button>
       </article>
       ${ordered.length > 1 && html`
