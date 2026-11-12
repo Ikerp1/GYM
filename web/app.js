@@ -61,6 +61,7 @@ const I = {
   search: html`<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>`,
   trophy: html`<svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5a3 3 0 003 4M16 6h3a3 3 0 01-3 4M12 13v4M8.5 20h7"/></svg>`,
   timer: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4"/></svg>`,
+  note: html`<svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5zM15 4v4h4M8 12h8M8 16h5"/></svg>`,
   grip: html`<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>`,
   calendar: html`<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`,
   body: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2.2"/><path d="M5 8.5h14M12 8.5v6M9 21l3-6.5 3 6.5"/></svg>`,
@@ -406,7 +407,7 @@ function useDragReorder(onMove, scrollerOf = () => null) {
 }
 
 // ---------- Pantalla: Entreno en curso ----------
-function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish, onDiscard, onRest, onCreateExercise }) {
+function WorkoutView({ workout, exercises, exById, lastSetsFor, lastNoteFor, onSave, onFinish, onDiscard, onRest, onCreateExercise }) {
   const [w, setW] = useState(workout);
   const [picker, setPicker] = useState(false);
   const [ask, setAsk] = useState(null);
@@ -470,6 +471,8 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
     ${w.items.map((it, i) => {
       const ex = exById[it.exId];
       const prev = lastSetsFor(it.exId, w.id);
+      const prevNote = lastNoteFor(it.exId, w.id);
+      const editingNote = it.note != null; // la caja de nota está abierta
       return html`<article class=${"card ex-card" + dr.cls(i)} ref=${dr.ref(i)} style=${dr.style(i)}>
         <header class="ex-head">
           ${w.items.length > 1 && html`<button class="drag-handle" aria-label=${`Mover ${ex?.name || "ejercicio"}: mantén pulsado y arrastra`} title="Mantén pulsado y arrastra"
@@ -483,6 +486,10 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
             <button class="icon-btn" aria-label="Quitar ejercicio" onClick=${() => setAsk({ title: "Quitar ejercicio", text: `¿Quitar ${ex?.name || "este ejercicio"} del entreno de hoy?`, yes: "Quitar", danger: true, onYes: () => commit({ ...w, items: w.items.filter((_, j) => j !== i) }, true) })}>${I.trash}</button>
           </div>
         </header>
+        ${prevNote && html`<div class="prev-note"><span class="prev-note-icon">${I.note}</span><div><small>Nota de la última vez · ${relDays(prevNote.when)}</small><p>${prevNote.text}</p></div></div>`}
+        ${editingNote && html`<textarea id=${`note-${i}`} class="input note-input" rows="2" maxlength="300" placeholder="Ej. agarre más cerrado, me molestó el hombro…" value=${it.note}
+          onInput=${(e) => setItem(i, (x) => ({ ...x, note: e.target.value }))}
+          onBlur=${(e) => { if (!e.target.value.trim()) setItem(i, ({ note, ...x }) => x, true); else onSave(latest.current); }}></textarea>`}
         <div class="sets">
           <div class="set-row head"><span aria-label="Serie">#</span><span>kg</span><span>Reps</span><span></span></div>
           ${it.sets.map((s, k) => html`<div class=${"set-row " + (s.done ? "is-done" : "")}>
@@ -494,7 +501,8 @@ function WorkoutView({ workout, exercises, exById, lastSetsFor, onSave, onFinish
         </div>
         <footer class="ex-foot">
           <button class="btn ghost sm" onClick=${() => addSet(i)}>${I.plus} Serie</button>
-          ${it.sets.length > 1 && html`<button class="btn ghost sm" onClick=${() => removeSet(i, it.sets.length - 1)}>Quitar última</button>`}
+          ${it.sets.length > 1 && html`<button class="btn ghost sm" aria-label="Quitar la última serie" onClick=${() => removeSet(i, it.sets.length - 1)}>− Serie</button>`}
+          ${!editingNote && html`<button class="btn ghost sm" aria-label="Escribir una nota en este ejercicio" onClick=${() => { setItem(i, (x) => ({ ...x, note: "" })); setTimeout(() => document.getElementById(`note-${i}`)?.focus(), 50); }}>${I.note} Nota</button>`}
           <label class="rest-select">${I.timer}
             <select aria-label="Descanso" value=${it.rest || DEFAULT_REST} onChange=${(e) => setItem(i, (x) => ({ ...x, rest: Number(e.target.value) }), true)}>
               ${REST_OPTIONS.map((r) => html`<option value=${r}>${mmss(r)}</option>`)}
@@ -621,6 +629,7 @@ function DayWorkouts({ date, workouts, exById, onClose }) {
           <div class="day-ex">
             <b>${exById[it.exId]?.name || "Ejercicio"}</b>
             <span class="day-sets">${it.sets.map((s) => html`<span class="day-set">${fmtKg(s.kg)}<small> kg</small> × ${s.reps ?? "—"}</span>`)}</span>
+            ${it.note && html`<p class="note-line">${I.note} ${it.note}</p>`}
           </div>
         </li>`)}</ul>
       </article>`;
@@ -810,6 +819,7 @@ function ExerciseStats({ exId, ex, sessions, onBack }) {
     <ul class="day-list">${sessions.slice(-5).reverse().map((s) => html`<li class="session-li">
       <span class="session-date">${dayLabel(s.t)}</span>
       <span class="day-sets">${s.sets.map((x) => html`<span class="day-set">${x.kg > 0 ? html`${fmtKg(x.kg)}<small> kg</small> × ` : ""}${x.reps}${x.kg > 0 ? "" : html`<small> reps</small>`}</span>`)}</span>
+      ${s.note && html`<p class="note-line">${I.note} ${s.note}</p>`}
     </li>`)}</ul>
   </div>`;
 }
@@ -930,7 +940,7 @@ function ProgressView({ finished, exById, onDelete, uid, toast }) {
       for (const it of w.items) {
         const sets = doneSets(it).filter((s) => s.reps).map((s) => ({ kg: s.kg ?? 0, reps: s.reps }));
         if (!sets.length) continue;
-        (m[it.exId] ??= []).push({ t: w.finishedAt, sets });
+        (m[it.exId] ??= []).push({ t: w.finishedAt, sets, note: it.note?.trim() || null });
       }
     }
     return m;
@@ -982,7 +992,7 @@ function ProgressView({ finished, exById, onDelete, uid, toast }) {
             <span class="pill">${w.items.reduce((n, it) => n + it.sets.length, 0)} series</span>
           </button>
           ${open === w.id && html`<div class="hist-detail">
-            ${w.items.map((it) => html`<p><b>${exById[it.exId]?.name || "Ejercicio"}</b><br /><span class="muted">${setsText(it.sets) || "Sin series"}</span></p>`)}
+            ${w.items.map((it) => html`<p><b>${exById[it.exId]?.name || "Ejercicio"}</b><br /><span class="muted">${setsText(it.sets) || "Sin series"}</span>${it.note ? html`<br /><span class="note-inline">${I.note} ${it.note}</span>` : ""}</p>`)}
             <button class="btn link danger-text" onClick=${() => setAsk({ title: "Borrar entreno", text: `¿Borrar el entreno «${w.name}» del ${dayLabel(w.finishedAt)}? No se puede deshacer.`, yes: "Borrar", danger: true, onYes: () => onDelete(w) })}>Borrar este entreno</button>
           </div>`}
         </li>`)}
@@ -1317,6 +1327,15 @@ function App() {
     }
     return [];
   };
+  // Última nota escrita en un ejercicio (en cualquier entreno anterior).
+  const lastNoteFor = (exId, excludeId) => {
+    for (const w of finished) {
+      if (w.id === excludeId) continue;
+      const it = w.items.find((x) => x.exId === exId && x.note?.trim());
+      if (it) return { text: it.note.trim(), when: w.finishedAt };
+    }
+    return null;
+  };
 
   if (user === undefined) return html`<main class="login"><div class="logo pulse">${I.today}</div></main>`;
   if (!user) return html`<${Login} />`;
@@ -1345,7 +1364,7 @@ function App() {
   };
   const saveWorkout = (w) => saveDoc(uid, "workouts", w.id, w);
   const finishWorkout = (w) => {
-    const items = w.items.map((it) => ({ ...it, sets: doneSets(it).map(({ hint, ...s }) => s) })).filter((it) => it.sets.length);
+    const items = w.items.map((it) => ({ ...it, note: it.note?.trim() || undefined, sets: doneSets(it).map(({ hint, ...s }) => s) })).filter((it) => it.sets.length);
     const done = { ...w, items, finishedAt: Date.now() };
     // Récords: peso máximo mayor que cualquier serie anterior de ese ejercicio.
     const records = [];
@@ -1389,7 +1408,7 @@ function App() {
     <main class="content">
       ${!loaded ? html`<div class="empty">Cargando tus datos…</div>`
         : tab === "hoy" ? (active
-          ? html`<${WorkoutView} key=${active.id} workout=${active} exercises=${exercises} exById=${exById} lastSetsFor=${lastSetsFor} onSave=${saveWorkout} onFinish=${finishWorkout} onDiscard=${discardWorkout} onRest=${startRest} onCreateExercise=${createExercise} />`
+          ? html`<${WorkoutView} key=${active.id} workout=${active} exercises=${exercises} exById=${exById} lastSetsFor=${lastSetsFor} lastNoteFor=${lastNoteFor} onSave=${saveWorkout} onFinish=${finishWorkout} onDiscard=${discardWorkout} onRest=${startRest} onCreateExercise=${createExercise} />`
           : html`<${TodayView} routines=${routines} finished=${finished} exById=${exById} lastSetsFor=${lastSetsFor} onStart=${startWorkout} goRoutines=${() => { setTab("rutinas"); setEditing({ id: newId(), name: "", items: [], isNew: true }); }} />`)
         : tab === "rutinas" ? html`<${RoutinesView} routines=${routines} exById=${exById} nextId=${nextId} onEdit=${(r) => setEditing(r)} onNew=${() => setEditing({ id: newId(), name: "", items: [], isNew: true })} onReorder=${reorder} />`
         : tab === "amigos" ? html`<${FriendsView} uid=${uid} mySummary=${mySummary} toast=${setToast} />`
