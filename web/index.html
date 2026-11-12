@@ -432,5 +432,9 @@ button.cal-day.done:hover { background: rgba(245, 165, 36, .22); }
 <div id="root"><main class="login"><p class="muted">Cargando…</p></main></div>
 <noscript><p style="padding:20px">Esta app necesita JavaScript activado.</p></noscript>
 <script type="module" src="app.js?v=__VERSION__"></script>
+<script>
+  // Guarda una copia de la app para poder abrirla sin cobertura (ver sw.js).
+  if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+</script>
 </body>
 </html>
